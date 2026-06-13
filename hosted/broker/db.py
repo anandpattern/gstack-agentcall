@@ -302,13 +302,28 @@ async def update_assignment_status(aid: str, status: str, detail: Any = None) ->
             if status == "ended":
                 # Billable time counts from when the call actually started
                 # (dispatched_at) — a 10-minute wait in the queue is free.
+                # Roll the call's billable minutes into the owner's running
+                # users.minutes_used IN THE SAME STATEMENT so the dispatch
+                # quota gate (main.dispatch) actually fires. The
+                # `status <> 'ended'` guard makes this idempotent: several
+                # paths (worker disconnect, recall, orphan sweep) can all
+                # mark the same assignment 'ended', and only the first one
+                # bills — no double-counting.
                 await cur.execute(
-                    """UPDATE assignments
-                       SET status=%s, detail=%s, ended_at=now(),
-                           billable_seconds = EXTRACT(EPOCH FROM
-                               (now() - COALESCE(dispatched_at, created_at)))::int
-                       WHERE id=%s""",
-                    (status, json.dumps(detail) if detail is not None else None, aid),
+                    """WITH upd AS (
+                           UPDATE assignments
+                              SET status='ended', detail=%s, ended_at=now(),
+                                  billable_seconds = EXTRACT(EPOCH FROM
+                                      (now() - COALESCE(dispatched_at, created_at)))::int
+                            WHERE id=%s AND status <> 'ended'
+                          RETURNING user_id, billable_seconds
+                       )
+                       UPDATE users u
+                          SET minutes_used = minutes_used
+                              + CEIL(GREATEST(upd.billable_seconds, 0) / 60.0)
+                         FROM upd
+                        WHERE u.id = upd.user_id""",
+                    (json.dumps(detail) if detail is not None else None, aid),
                 )
             else:
                 await cur.execute(
@@ -316,6 +331,21 @@ async def update_assignment_status(aid: str, status: str, detail: Any = None) ->
                     (status, json.dumps(detail) if detail is not None else None, aid),
                 )
         await conn.commit()
+
+
+async def count_active_assignments(user_id: str) -> int:
+    """How many calls this user currently has live or waiting in line.
+    Used to cap concurrency so one user can't seize the whole shared pool."""
+    pool = await init_pool()
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT count(*) FROM assignments "
+                "WHERE user_id=%s AND status IN ('started','queued')",
+                (user_id,),
+            )
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
 
 
 async def list_assignments(user_id: Optional[str] = None, limit: int = 50) -> list[dict]:

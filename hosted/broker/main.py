@@ -67,6 +67,36 @@ TRANSIENT_AGENTCALL_KEY = os.environ.get("GSTACK_POOL_AGENTCALL_KEY", "")
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("GSTACK_ALLOWED_ORIGINS", "").split(",") if o.strip()]
 
 
+# ── Cost / abuse guards (production safety) ───────────────────────────────
+# These bound spend on the centrally-funded AgentCall pool key.
+#   • quota (users.quota_minutes, default 60) caps a user's TOTAL minutes —
+#     enforced in dispatch() now that update_assignment_status bills it.
+#   • MAX_CALL_MIN caps any ONE call's wall-clock (clamps the client-supplied
+#     max_duration_min, which was previously unbounded).
+#   • MAX_CONCURRENT_PER_USER stops one user seizing the whole shared pool.
+#   • the rate limiter blunts scripted hammering of dispatch/say.
+MAX_CALL_MIN            = int(os.environ.get("GSTACK_MAX_CALL_MIN", "45"))
+DEFAULT_CALL_MIN        = 30
+MAX_CONCURRENT_PER_USER = int(os.environ.get("GSTACK_MAX_CONCURRENT", "2"))
+RATE_LIMIT_MAX          = int(os.environ.get("GSTACK_RATE_LIMIT", "10"))
+RATE_LIMIT_WINDOW_SEC   = 60
+_RATE_HITS: dict[str, deque] = {}
+
+
+def _rate_ok(user_id: str) -> bool:
+    """Sliding-window limiter — True if under the cap (records the hit).
+    In-memory and per-machine; a coarse anti-hammer guard, not a billing
+    control (that's the quota)."""
+    now = time.time()
+    hits = _RATE_HITS.setdefault(user_id, deque())
+    while hits and now - hits[0] > RATE_LIMIT_WINDOW_SEC:
+        hits.popleft()
+    if len(hits) >= RATE_LIMIT_MAX:
+        return False
+    hits.append(now)
+    return True
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # in-memory worker registry (live WS connections)
 
@@ -283,13 +313,28 @@ async def dispatch(req: web.Request) -> web.Response:
     if not meet_url or not specs:
         return web.json_response({"error": "meetUrl and specialists[] required"}, status=400)
 
-    # Quota check.
-    if user_row["minutes_used"] >= user_row["quota_minutes"]:
+    is_admin = user_row["role"] == "admin"
+
+    # ── cost / abuse guards (members only; the operator/admin runs the pool) ──
+    if not is_admin and not _rate_ok(user_row["id"]):
+        return web.json_response(
+            {"error": "rate_limited", "detail": "too many dispatches; slow down"},
+            status=429)
+
+    # Quota — total bot-minutes per user. Now actually enforced:
+    # update_assignment_status bills minutes_used on call end.
+    if not is_admin and user_row["minutes_used"] >= user_row["quota_minutes"]:
         return web.json_response({"error": "quota exhausted",
                                   "minutes_used": user_row["minutes_used"],
                                   "quota_minutes": user_row["quota_minutes"]}, status=429)
 
-    is_admin = user_row["role"] == "admin"
+    # Concurrency — one user can't seize every brain in the shared pool.
+    if not is_admin:
+        active = await db.count_active_assignments(user_row["id"])
+        if active >= MAX_CONCURRENT_PER_USER:
+            return web.json_response(
+                {"error": "too_many_active", "active": active,
+                 "limit": MAX_CONCURRENT_PER_USER}, status=429)
     # Resolve the set of admins so members can route to their brains.
     admin_user_ids = {u["id"] for u in await db.list_users() if u.get("role") == "admin"}
     worker = pick_idle_worker_for(user_row["id"], is_admin, admin_user_ids)
@@ -320,8 +365,14 @@ async def dispatch(req: web.Request) -> web.Response:
             status=202,
         )
 
-    msg = _assignment_msg(aid, meet_url, specs, brief, mode,
-                          int(body.get("max_duration_min", 30)))
+    # Clamp the client-supplied duration — it was previously trusted
+    # verbatim (a client could send max_duration_min: 999999).
+    try:
+        requested_min = int(body.get("max_duration_min", DEFAULT_CALL_MIN))
+    except (TypeError, ValueError):
+        requested_min = DEFAULT_CALL_MIN
+    max_duration_min = max(1, min(requested_min, MAX_CALL_MIN))
+    msg = _assignment_msg(aid, meet_url, specs, brief, mode, max_duration_min)
     try:
         await worker.ws.send_str(json.dumps(msg))
     except Exception as e:
@@ -829,8 +880,50 @@ def _load_specialists_data() -> list[dict]:
 
 # ──────────────────────────────────────────────────────────────────────────
 
+async def duration_sweep_loop() -> None:
+    """Hard ceiling on any single call. The assignment message carries
+    `end_at`, but the worker doesn't enforce it — so a bot in a meeting
+    that stays populated would otherwise run until manual recall or
+    AgentCall's ~2-min alone-timeout, billing the shared pool key the
+    whole time. This centralized sweep force-recalls any call that's run
+    past MAX_CALL_MIN, exactly like a manual /recall."""
+    cap = MAX_CALL_MIN * 60
+    while True:
+        try:
+            await asyncio.sleep(30)
+            now = time.time()
+            for w in list(WORKERS.values()):
+                if not (w.state == "busy" and w.last_assignment_at
+                        and now - w.last_assignment_at > cap):
+                    continue
+                aid = w.last_assignment_id
+                try:
+                    await w.ws.send_str(json.dumps(
+                        {"type": "recall", "id": aid or "*"}))
+                except Exception:
+                    pass
+                if aid:
+                    try:
+                        await db.update_assignment_status(
+                            aid, "ended", {"reason": "max_duration",
+                                           "cap_min": MAX_CALL_MIN})
+                    except Exception as e:
+                        print(f"[sweep] end {aid} failed: {e}", flush=True)
+                    await db.audit(w.owner_user_id, "recall.max_duration",
+                                   {"assignment_id": aid, "cap_min": MAX_CALL_MIN})
+                # Clear the timer so we don't re-recall the same call every
+                # 30s; the worker's idle-ack (or the orphan sweep) resets state.
+                w.last_assignment_at = None
+                print(f"[sweep] force-ended {aid} (> {MAX_CALL_MIN}min)", flush=True)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[sweep] loop error: {e}", flush=True)
+
+
 async def on_startup(app: web.Application) -> None:
     await db.run_migrations()
+    app["duration_sweep"] = asyncio.create_task(duration_sweep_loop())
     # Reload the dispatch queue from the DB — a broker redeploy must not
     # silently drop people who were waiting in line.
     try:
@@ -852,6 +945,9 @@ async def on_startup(app: web.Application) -> None:
 
 
 async def on_cleanup(app: web.Application) -> None:
+    task = app.get("duration_sweep")
+    if task:
+        task.cancel()
     await db.close_pool()
 
 
@@ -876,7 +972,9 @@ def _add_cors(resp: web.StreamResponse, req: web.Request) -> None:
         # Dev: mirror whatever origin the request came from (or "*" if absent).
         resp.headers["Access-Control-Allow-Origin"] = origin or "*"
     resp.headers["Access-Control-Allow-Credentials"] = "true"
-    resp.headers["Access-Control-Allow-Headers"]     = "authorization, content-type, x-dev-user-id"
+    resp.headers["Access-Control-Allow-Headers"]     = (
+        "authorization, content-type, x-dev-user-id"
+        if auth.DEV_AUTH_ENABLED else "authorization, content-type")
     resp.headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS"
     resp.headers["Vary"]                             = "Origin"
 

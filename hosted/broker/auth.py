@@ -26,6 +26,12 @@ CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL", "")
 CLERK_ISSUER   = os.environ.get("CLERK_ISSUER", "")  # e.g. https://<instance>.clerk.accounts.dev
 CLERK_AUDIENCE = os.environ.get("CLERK_AUDIENCE", "")  # optional; Clerk usually omits aud
 DEV_USER_ID    = os.environ.get("DEV_USER_ID", "user_dev_local")
+# The X-Dev-User-Id fallback is a spoofable, fully-trusted identity. It must
+# NEVER be reachable in production. It now requires an explicit opt-in
+# (GSTACK_DEV_AUTH=1) on top of an unset CLERK_JWKS_URL — so a prod broker
+# that simply forgets to set the Clerk secret fails CLOSED (401s) instead of
+# silently trusting an attacker-supplied header.
+DEV_AUTH_ENABLED = os.environ.get("GSTACK_DEV_AUTH", "") == "1"
 
 
 _jwks_cache: dict = {"fetched_at": 0.0, "keys": []}
@@ -96,8 +102,9 @@ def identity_from_request(req: web.Request) -> Optional[dict]:
                 "name":     claims.get("name") or claims.get("full_name") or "",
                 "source":   "clerk",
             }
-    # 2. Dev fallback when Clerk isn't configured.
-    if not CLERK_JWKS_URL:
+    # 2. Dev fallback — ONLY when Clerk is unconfigured AND dev-auth is
+    #    explicitly enabled. Fails closed otherwise (returns None → 401).
+    if not CLERK_JWKS_URL and DEV_AUTH_ENABLED:
         dev = req.headers.get("x-dev-user-id") or DEV_USER_ID
         return {
             "user_id": dev,
