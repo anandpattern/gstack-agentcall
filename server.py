@@ -30,6 +30,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -443,22 +444,74 @@ def validate_meet_url(url: str) -> bool:
 # Recall
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _agentcall_api_key() -> str:
+    k = os.environ.get("AGENTCALL_API_KEY", "")
+    if k:
+        return k
+    try:
+        cfg = json.loads((Path.home() / ".agentcall" / "config.json").read_text())
+        return cfg.get("api_key", "")
+    except Exception:
+        return ""
+
+
+def _delete_agentcall_call(call_id: str) -> bool:
+    """End a live AgentCall call by id. Killing local processes does NOT evict
+    the cloud bot from the meeting — only this does (live-test feedback #1)."""
+    key = _agentcall_api_key()
+    if not key:
+        return False
+    base = (os.environ.get("AGENTCALL_API_URL", "") or "https://api.agentcall.dev").rstrip("/")
+    req = urllib.request.Request(
+        f"{base}/v1/calls/{call_id}", method="DELETE",
+        headers={"Authorization": f"Bearer {key}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return 200 <= getattr(r, "status", 200) < 300
+    except Exception:
+        return False
+
+
 def recall(targets: list[str] | None, all_targets: bool) -> dict:
-    """Send SIGTERM to matching runners. Returns {stopped:[…], missing:[…]}."""
+    """SIGTERM matching runners' whole process tree AND end their cloud
+    AgentCall calls. Returns {stopped:[…], missing:[…], calls_ended:[…]}."""
     with _active_lock:
         data = _load_active()
         runners = data.get("runners", [])
+        session_dir = data.get("session_dir")
 
     stopped: list[dict] = []
     missing: list[str] = []
     remaining: list[dict] = []
+    calls_ended: list[str] = []
+
+    def _end_cloud_call(spec_id: str) -> None:
+        """End the cloud AgentCall call for this spec — reads
+        <session_dir>/<spec_id>.callid and DELETEs it. Idempotent."""
+        if not session_dir:
+            return
+        try:
+            cid_path = Path(session_dir) / f"{spec_id}.callid"
+            if not cid_path.exists():
+                return
+            cid = cid_path.read_text().strip()
+            if cid and _delete_agentcall_call(cid):
+                calls_ended.append(cid)
+                cid_path.unlink()
+        except Exception:
+            pass
 
     for r in runners:
         pid = r.get("pid")
         spec_id = r.get("id")
-        if not _pid_alive(pid):
-            continue  # prune dead
         match = all_targets or (spec_id in (targets or []))
+        if not _pid_alive(pid):
+            # Dead runner — but its CLOUD call may still be live in the room
+            # (the orphan case, feedback #1). End it if targeted, then prune.
+            if match:
+                _end_cloud_call(spec_id)
+            continue
         if not match:
             remaining.append(r)
             continue
@@ -470,22 +523,32 @@ def recall(targets: list[str] | None, all_targets: bool) -> dict:
             missing.append(f"{spec_id}:pid_no_longer_ours")
             continue
         try:
-            # Reap the whole process TREE, not just the runner. Runners are
-            # spawned with start_new_session=True, so the runner pid leads its
-            # own process group; killpg takes down its children too — the
-            # bridge, launch-visual.sh, tail -f *.cmds — which otherwise linger
-            # and become the orphans that haunt the room after a network blip
-            # (live-test feedback G). Fall back to a plain kill if the group is
-            # already gone.
+            # Reap the whole process TREE, not just the runner (feedback G):
+            # runners spawn with start_new_session=True, so killpg on the
+            # runner pid takes down the bridge, launch-visual.sh, tail -f too.
             try:
                 os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
             except (ProcessLookupError, PermissionError):
                 os.kill(int(pid), signal.SIGTERM)
             stopped.append({"id": spec_id, "pid": pid, "name": r.get("name")})
+            _end_cloud_call(spec_id)   # evict the cloud bot, not just local
         except ProcessLookupError:
             missing.append(spec_id)
         except Exception as e:
             missing.append(f"{spec_id}:{e}")
+
+    # Hard-reset backstop: on recall-all, sweep EVERY leftover .callid in the
+    # session dir and end it — catches truly orphaned calls whose runner entry
+    # is already gone (feedback #1/#8). DELETE on an ended call is harmless.
+    if all_targets and session_dir:
+        try:
+            for cid_file in Path(session_dir).glob("*.callid"):
+                cid = cid_file.read_text().strip()
+                if cid and _delete_agentcall_call(cid):
+                    calls_ended.append(cid)
+                cid_file.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     # Anything the caller asked for but we didn't find:
     if not all_targets and targets:
@@ -499,7 +562,7 @@ def recall(targets: list[str] | None, all_targets: bool) -> dict:
         data["runners"] = remaining
         _save_active(data)
 
-    return {"stopped": stopped, "missing": missing}
+    return {"stopped": stopped, "missing": missing, "calls_ended": calls_ended}
 
 
 # ──────────────────────────────────────────────────────────────────────────────

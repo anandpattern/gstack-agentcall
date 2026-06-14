@@ -358,6 +358,20 @@ class Runner:
     def handle_event(self, event: dict) -> None:
         kind = event.get("event") or event.get("type") or ""
 
+        # Persist the cloud call_id the moment the bridge creates the call, so
+        # /recall can END the AgentCall call itself. Killing local processes
+        # does NOT evict the bot from the room (live-test feedback #1) — only
+        # the AgentCall API does. recall reads <session_dir>/<spec_id>.callid.
+        if kind == "call.created":
+            cid = event.get("call_id")
+            if cid:
+                try:
+                    (self.session_dir / f"{self.spec_id}.callid").write_text(str(cid))
+                    self.log(f"call_id recorded: {cid}")
+                except Exception as e:
+                    self.log(f"call_id persist failed: {e}")
+            return
+
         # Track when the bot is actually inside the meeting. Anything that
         # produces audio BEFORE this gets silently dropped by the AgentCall
         # server (no meeting audio context yet → tts.done with no playback).
