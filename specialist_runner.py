@@ -308,6 +308,11 @@ class Runner:
         self.greeted = True
         text = self.greeting_text()
         self.log(f"greeting ({reason}): {text!r}")
+        # Serialize greetings through the cross-bot lock so multiple specialists
+        # don't all greet at once and talk over each other (feedback A). Matches
+        # the mid-call speak path; the lock releases on this greet's tts.done,
+        # letting the next waiting bot greet in turn.
+        self._acquire_speech_lock()
         self.send_cmd(self._tts_speak_cmd(text))
 
     # ── bridge spawn via bash launcher ─────────────────────────────────────
