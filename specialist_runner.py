@@ -90,6 +90,51 @@ def _bus_dir() -> Path:
 
 BUS_DIR = _bus_dir()
 INBOX = BUS_DIR / "inbox.jsonl"
+SPOKEN = BUS_DIR / "spoken.jsonl"   # recently-spoken bot TTS text (all bots), for echo dedup
+
+
+def _norm_text(t: str) -> str:
+    """Lowercase, keep alnum + spaces, collapse whitespace — for fuzzy echo
+    matching between heard transcripts and spoken bot text."""
+    return " ".join("".join(c for c in (t or "").lower() if c.isalnum() or c.isspace()).split())
+
+
+def _record_spoken(text: str) -> None:
+    """Append bot-spoken TTS text to the shared registry so the listener can
+    drop it if STT echoes it back as a 'human' utterance (feedback D)."""
+    text = (text or "").strip()
+    if not text:
+        return
+    try:
+        with open(SPOKEN, "a", buffering=1) as fh:
+            fh.write(json.dumps({"ts": time.time(), "text": text}) + "\n")
+    except Exception:
+        pass
+
+
+def _is_echo_of_bot(text: str, window_s: float = 30.0) -> bool:
+    """True if `text` matches something a bot spoke in the last window — the
+    bot's own TTS transcribed back and (mis)attributed to a human (feedback D).
+    Length-guarded so short genuine human lines aren't dropped."""
+    norm = _norm_text(text)
+    if len(norm) < 8:
+        return False
+    cutoff = time.time() - window_s
+    try:
+        lines = SPOKEN.read_text(encoding="utf-8").splitlines()[-200:]
+    except Exception:
+        return False
+    for line in reversed(lines):
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if rec.get("ts", 0) < cutoff:
+            break
+        spoken = _norm_text(rec.get("text", ""))
+        if spoken and (norm in spoken or spoken in norm):
+            return True
+    return False
 
 # Cross-bot echo filter — display names of every known bot (self included).
 # Listener runner drops user.message events where `speaker.name` matches any
@@ -229,6 +274,9 @@ class Runner:
         pass destination='meeting' explicitly via the outbox if it ever
         becomes useful again.
         """
+        # Record what we're about to say so the listener can drop it if STT
+        # echoes it back as a 'human' utterance (echo-loop guard, feedback D).
+        _record_spoken(text)
         cmd: dict = {
             "command": "tts.speak",
             "text": text,
@@ -432,6 +480,13 @@ class Runner:
 
         text = (event.get("text") or "").strip()
         if not text:
+            return
+
+        # Text-based echo guard: the bot's own TTS often gets transcribed back
+        # and (mis)attributed to a human speaker — drop it (feedback D). The
+        # speaker-name filter above misses this because STT picks a human name.
+        if _is_echo_of_bot(text):
+            self.log(f"dropped echo (bot TTS): {text[:80]!r}")
             return
 
         entry = {
