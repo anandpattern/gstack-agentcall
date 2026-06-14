@@ -470,7 +470,17 @@ def recall(targets: list[str] | None, all_targets: bool) -> dict:
             missing.append(f"{spec_id}:pid_no_longer_ours")
             continue
         try:
-            os.kill(int(pid), signal.SIGTERM)
+            # Reap the whole process TREE, not just the runner. Runners are
+            # spawned with start_new_session=True, so the runner pid leads its
+            # own process group; killpg takes down its children too — the
+            # bridge, launch-visual.sh, tail -f *.cmds — which otherwise linger
+            # and become the orphans that haunt the room after a network blip
+            # (live-test feedback G). Fall back to a plain kill if the group is
+            # already gone.
+            try:
+                os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                os.kill(int(pid), signal.SIGTERM)
             stopped.append({"id": spec_id, "pid": pid, "name": r.get("name")})
         except ProcessLookupError:
             missing.append(spec_id)
