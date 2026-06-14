@@ -5,6 +5,7 @@ import { useToast } from "@/lib/toast";
 import { SpecialistCard } from "./SpecialistCard";
 import { PoolBusyModal } from "./PoolBusyModal";
 import type { Specialist } from "@/lib/types";
+import { STATIC_SPECIALISTS } from "@/lib/specialists-fallback";
 
 // Curated team presets — mirrors data/teams.json on the backend.
 const TEAMS: { id: string; name: string; specs: string[] }[] = [
@@ -25,7 +26,7 @@ export function DispatchPanel() {
   const { mutate: refreshWorkers }     = useApiSWR<unknown>("/api/workers");
   const { mutate: refreshAssignments } = useApiSWR<unknown>("/api/assignments");
 
-  const all = specsResp?.specialists ?? [];
+  const all = specsResp?.specialists ?? STATIC_SPECIALISTS;
 
   const [meetUrl, setMeetUrl] = useState("");
   const [brief, setBrief] = useState("");

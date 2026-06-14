@@ -3,12 +3,15 @@ import { useMemo, useState } from "react";
 import { useApiSWR } from "@/lib/api";
 import { SpecialistCard } from "@/components/SpecialistCard";
 import type { Specialist } from "@/lib/types";
+import { STATIC_SPECIALISTS } from "@/lib/specialists-fallback";
 
 const CATEGORIES = ["All", "Strategy", "Planning", "Design", "Engineering", "Review", "Quality", "Release", "Ops"];
 
 export default function SpecialistsPage() {
   const { data } = useApiSWR<{ specialists: Specialist[] }>("/api/specialists");
-  const all = data?.specialists ?? [];
+  // Render the static roster instantly; SWR swaps in live data when the
+  // cross-region API call resolves. No more blank "loading" wait.
+  const all = data?.specialists ?? STATIC_SPECIALISTS;
   const [category, setCategory] = useState("All");
 
   const filtered = useMemo(() => {
