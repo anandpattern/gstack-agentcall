@@ -10,7 +10,6 @@ import type { User } from "@/lib/types";
 // the bring-your-own-brain flow without admin context.
 const MEMBER_NAV = [
   { href: "/",            label: "Dashboard",        icon: HomeIcon  },
-  { href: "/specialists", label: "Specialists",      icon: GridIcon  },
   { href: "/byob",        label: "Bring your brain", icon: BrainIcon },
 ];
 
@@ -164,9 +163,6 @@ function UserPill() {
 
 function HomeIcon(p: React.SVGProps<SVGSVGElement>) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 11.5L12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>;
-}
-function GridIcon(p: React.SVGProps<SVGSVGElement>) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3"  width="7" height="7" rx="1.5"/><rect x="14" y="3"  width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>;
 }
 function CallIcon(p: React.SVGProps<SVGSVGElement>) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 6a3 3 0 0 1 3-3h1.5l2 5-2 1a11 11 0 0 0 5 5l1-2 5 2V15a3 3 0 0 1-3 3A15 15 0 0 1 3 6z"/></svg>;

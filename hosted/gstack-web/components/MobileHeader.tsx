@@ -20,7 +20,6 @@ export function MobileHeader() {
 
   const memberNav = [
     { href: "/",            label: "Dashboard"        },
-    { href: "/specialists", label: "Specialists"      },
     { href: "/byob",        label: "Bring your brain" },
   ];
   const adminNav = [
