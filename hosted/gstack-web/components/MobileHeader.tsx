@@ -120,13 +120,15 @@ function MobileNavLink({ href, label, active, onClick }:
 }
 
 function MobileStatus() {
-  const { data, error } = useApiSWR<{ ok: boolean }>(
+  const { data, error } = useApiSWR<{ ok: boolean; brains?: number; brains_total?: number }>(
     "/healthz", { refreshInterval: 10000, allowSignedOut: true });
   const up = !error && data?.ok === true;
+  const live = up && (data?.brains ?? 0) > 0;       // a brain is connected + idle
+  const busy = up && !live && (data?.brains_total ?? 0) > 0;
   return (
     <span
-      className={`dot ${up ? "dot-ok pulse" : error ? "dot-bad" : "dot-mute"}`}
-      title={up ? "Demo live" : "Demo offline"}
+      className={`dot ${live ? "dot-ok pulse" : up ? "dot-mute" : error ? "dot-bad" : "dot-mute"}`}
+      title={live ? "Demo live — brain ready" : up ? (busy ? "Brains busy" : "No brain online") : "Demo offline"}
     />
   );
 }

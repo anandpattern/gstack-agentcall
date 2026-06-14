@@ -1022,8 +1022,12 @@ def _cors_preflight(req: web.Request) -> web.Response:
 
 
 async def healthz(req: web.Request) -> web.Response:
-    """Liveness probe — no auth, no DB. 200 means the process is up."""
-    return web.json_response({"ok": True})
+    """Liveness probe — no auth, no DB. 200 means the process is up. Also
+    reports pool brain availability so the dashboard's status dot reflects
+    whether a dispatch can actually be served (a brain is connected AND idle),
+    not merely that the broker process is alive."""
+    idle = sum(1 for w in WORKERS.values() if w.state == "idle")
+    return web.json_response({"ok": True, "brains": idle, "brains_total": len(WORKERS)})
 
 
 async def readyz(req: web.Request) -> web.Response:

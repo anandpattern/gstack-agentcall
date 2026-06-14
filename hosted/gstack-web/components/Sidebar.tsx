@@ -100,19 +100,29 @@ export function Sidebar() {
  * visitors when the demo isn't responding — and a tiny "the demo is on"
  * confirmation when it is. */
 function BrokerStatus() {
-  const { data, error, isLoading } = useApiSWR<{ ok: boolean }>(
+  const { data, error, isLoading } = useApiSWR<{ ok: boolean; brains?: number; brains_total?: number }>(
     "/healthz",
     { refreshInterval: 10000, allowSignedOut: true },
   );
   const up = !error && data?.ok === true;
   const checking = isLoading && !data && !error;
+  const brains = data?.brains ?? 0;
+  const total = data?.brains_total ?? 0;
+  // "Live" only when a brain is connected AND idle — i.e. a dispatch can
+  // actually be served right now. Broker-up-but-no-free-brain shows muted so
+  // users don't dispatch into a dead pool and get stuck.
+  const live = up && brains > 0;
+  const dot = checking ? "dot-mute" : !up ? "dot-bad" : live ? "dot-ok pulse" : "dot-mute";
+  const label = checking ? "checking…"
+    : !up ? "demo offline"
+    : live ? "demo live"
+    : total > 0 ? "brains busy"
+    : "no brain";
 
   return (
     <div className="px-5 pb-3 pt-1 flex items-center gap-2 text-[10.5px] mono text-[var(--color-muted)]">
-      <span className={`dot ${checking ? "dot-mute" : up ? "dot-ok pulse" : "dot-bad"}`} />
-      <span className="uppercase tracking-wider">
-        {checking ? "checking…" : up ? "demo live" : "demo offline"}
-      </span>
+      <span className={`dot ${dot}`} />
+      <span className="uppercase tracking-wider">{label}</span>
     </div>
   );
 }
