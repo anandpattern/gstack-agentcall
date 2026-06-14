@@ -81,6 +81,12 @@ MAX_CONCURRENT_PER_USER = int(os.environ.get("GSTACK_MAX_CONCURRENT", "2"))
 RATE_LIMIT_MAX          = int(os.environ.get("GSTACK_RATE_LIMIT", "10"))
 RATE_LIMIT_WINDOW_SEC   = 60
 _RATE_HITS: dict[str, deque] = {}
+# Bring-your-own-brain is OFF until the bring-your-own-AgentCall-key flow ships.
+# While off, members can't mint worker keys, so they can't stand up a worker
+# that would receive the shared pool key over the assignment WS (the
+# billing-theft path). Flip GSTACK_BYOB_ENABLED=1 to re-enable. Admins
+# (the operator) can always mint keys to run the shared pool.
+BYOB_ENABLED            = os.environ.get("GSTACK_BYOB_ENABLED", "") == "1"
 
 
 def _rate_ok(user_id: str) -> bool:
@@ -570,6 +576,14 @@ async def mint_worker_key(req: web.Request) -> web.Response:
     user_row = await _ensure_user(req)
     if user_row is None:
         return web.json_response({"error": "unauthorized"}, status=401)
+    # BYOB gate: until the bring-your-own-AgentCall-key flow ships, only admins
+    # may mint worker keys. A member with a key could connect a worker and read
+    # the shared pool key off the assignment WS — closing that is the cheap fix.
+    if user_row["role"] != "admin" and not BYOB_ENABLED:
+        return web.json_response(
+            {"error": "byob_disabled",
+             "detail": "Bring your own brain is coming soon — for now, use the shared specialist pool."},
+            status=403)
     try:
         body = await req.json()
     except Exception:
