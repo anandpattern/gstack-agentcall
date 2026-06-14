@@ -60,6 +60,13 @@ except ImportError:
 
 
 TRANSIENT_AGENTCALL_KEY = os.environ.get("GSTACK_POOL_AGENTCALL_KEY", "")
+# Capped/scoped AgentCall key handed to MEMBER-owned (BYOB) workers instead of
+# the master pool key, so a leak from an arbitrary user's machine is bounded
+# and independently revocable. The master key goes ONLY to admin-owned pool
+# workers, NEVER to a member worker. If this is unset, a member worker gets no
+# key (safe failure) rather than the master. Set it + GSTACK_BYOB_ENABLED=1 to
+# open BYOB to everyone safely.
+TRANSIENT_BYOB_KEY = os.environ.get("GSTACK_BYOB_AGENTCALL_KEY", "")
 
 # Comma-separated list of origins allowed to call /api/*. In production
 # this should be the gstack-web Vercel URL. Empty = mirror request origin
@@ -180,8 +187,18 @@ def queue_position(aid: str) -> Optional[int]:
     return None
 
 
+def _key_for_worker(worker: "Worker", admin_user_ids: set[str]) -> str:
+    """Master pool key for admin-owned (operator) workers; the capped BYOB key
+    for member-owned (BYOB) workers. NEVER hand the master key to a member —
+    that's the credential-leak path. A member worker with no BYOB key set gets
+    an empty key (bot fails to start) rather than the master."""
+    if worker.owner_user_id in admin_user_ids:
+        return TRANSIENT_AGENTCALL_KEY
+    return TRANSIENT_BYOB_KEY
+
+
 def _assignment_msg(aid: str, meet_url: str, specs: list, brief: str, mode: str,
-                    max_duration_min: int = 30) -> dict:
+                    max_duration_min: int = 30, agentcall_key: Optional[str] = None) -> dict:
     return {
         "type":              "assignment",
         "id":                aid,
@@ -189,7 +206,10 @@ def _assignment_msg(aid: str, meet_url: str, specs: list, brief: str, mode: str,
         "specialists":       specs,
         "brief":             brief,
         "mode":              mode,
-        "agentcall_api_key": TRANSIENT_AGENTCALL_KEY,
+        # Admin workers get the master pool key; member/BYOB workers get the
+        # capped key (resolved by the caller via _key_for_worker). Falls back to
+        # the master only when no caller override is given (legacy callers).
+        "agentcall_api_key": agentcall_key if agentcall_key is not None else TRANSIENT_AGENTCALL_KEY,
         "end_at":            time.time() + max_duration_min * 60,
     }
 
@@ -221,7 +241,8 @@ async def try_dispatch_queued() -> None:
         if worker is None:
             continue
         msg = _assignment_msg(item["id"], item["meet_url"], item["specialists"],
-                              item["brief"], item["mode"])
+                              item["brief"], item["mode"],
+                              agentcall_key=_key_for_worker(worker, admin_user_ids))
         try:
             await worker.ws.send_str(json.dumps(msg))
         except Exception as e:
@@ -378,7 +399,8 @@ async def dispatch(req: web.Request) -> web.Response:
     except (TypeError, ValueError):
         requested_min = DEFAULT_CALL_MIN
     max_duration_min = max(1, min(requested_min, MAX_CALL_MIN))
-    msg = _assignment_msg(aid, meet_url, specs, brief, mode, max_duration_min)
+    msg = _assignment_msg(aid, meet_url, specs, brief, mode, max_duration_min,
+                          agentcall_key=_key_for_worker(worker, admin_user_ids))
     try:
         await worker.ws.send_str(json.dumps(msg))
     except Exception as e:
