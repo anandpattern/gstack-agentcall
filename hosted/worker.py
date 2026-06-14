@@ -570,6 +570,21 @@ async def run_session(url: str, key: str, state: State, meta: dict) -> None:
         )
         for t in pending:
             t.cancel()
+        # Drain both sets so neither surfaces as "Task exception was never
+        # retrieved" on every disconnect (feedback #5). ConnectionClosed is the
+        # normal disconnect path; surface anything genuinely unexpected.
+        for t in pending:
+            try:
+                await t
+            except BaseException:
+                pass
+        for t in done:
+            try:
+                exc = t.exception()
+            except asyncio.CancelledError:
+                exc = None
+            if exc and not isinstance(exc, websockets.ConnectionClosed):
+                emit({"type": "worker_task_error", "error": repr(exc)})
 
 
 async def main_async(args: argparse.Namespace) -> None:
