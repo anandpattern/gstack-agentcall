@@ -1028,9 +1028,15 @@ def _add_cors(resp: web.StreamResponse, req: web.Request) -> None:
         # Dev: mirror whatever origin the request came from (or "*" if absent).
         resp.headers["Access-Control-Allow-Origin"] = origin or "*"
     resp.headers["Access-Control-Allow-Credentials"] = "true"
+    # x-client-token-ms is the perf-telemetry header api.ts sends. It MUST be
+    # here: when the web app calls the broker cross-origin (direct mode), the
+    # browser preflights, and any request header not in this list makes the
+    # preflight FAIL — which silently blocks the real request (the app breaks
+    # with only OPTIONS in the logs, no GETs). Same-origin (proxy) never
+    # preflighted, which is why this only surfaced after the direct-call switch.
     resp.headers["Access-Control-Allow-Headers"]     = (
-        "authorization, content-type, x-dev-user-id"
-        if auth.DEV_AUTH_ENABLED else "authorization, content-type")
+        "authorization, content-type, x-client-token-ms, x-dev-user-id"
+        if auth.DEV_AUTH_ENABLED else "authorization, content-type, x-client-token-ms")
     resp.headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS"
     # Cache the preflight 24h. When the web app calls the broker DIRECTLY
     # (NEXT_PUBLIC_BROKER_URL set) instead of via the Vercel proxy, the
