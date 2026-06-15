@@ -1,9 +1,10 @@
 "use client";
 import { useApiSWR } from "@/lib/api";
+import { AsyncState } from "@/components/AsyncState";
 import type { Assignment } from "@/lib/types";
 
 export default function CallsPage() {
-  const { data } = useApiSWR<{ assignments: Assignment[] }>("/api/assignments");
+  const { data, error, isLoading } = useApiSWR<{ assignments: Assignment[] }>("/api/assignments");
   const items = data?.assignments ?? [];
 
   return (
@@ -15,7 +16,9 @@ export default function CallsPage() {
         </p>
       </header>
 
-      {items.length === 0 ? (
+      {(isLoading || error) ? (
+        <AsyncState loading={isLoading} error={error} loadingText="Loading your calls…" />
+      ) : items.length === 0 ? (
         <div className="surface p-12 text-center text-[14px] text-[var(--color-muted)] anim-up">
           No calls yet. Head to the dashboard, paste a Meet URL, dispatch.
         </div>

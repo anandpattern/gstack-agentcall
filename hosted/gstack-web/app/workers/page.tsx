@@ -3,12 +3,13 @@ import { useState } from "react";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { AsyncState } from "@/components/AsyncState";
 import type { Worker, WorkerKey } from "@/lib/types";
 
 export default function WorkersPage() {
   const call = useApi();
   const toast = useToast();
-  const { data: keysResp,    mutate: refreshKeys }    = useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
+  const { data: keysResp, error: keysError, isLoading: keysLoading, mutate: refreshKeys } = useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
   const { data: workersResp, mutate: refreshWorkers } = useApiSWR<{ workers: Worker[] }>("/api/workers");
 
   const keys = keysResp?.keys ?? [];
@@ -46,7 +47,9 @@ export default function WorkersPage() {
           <h2 className="text-[15px] font-semibold">Your keys</h2>
           <span className="text-[12px] text-[var(--color-muted)]">{keys.length} total · {workers.length} online</span>
         </div>
-        {keys.length === 0 ? (
+        {(keysLoading || keysError) ? (
+          <AsyncState loading={keysLoading} error={keysError} loadingText="Loading your brains…" />
+        ) : keys.length === 0 ? (
           <div className="surface p-8 text-center text-[13px] text-[var(--color-muted)]">No brains yet — create one above.</div>
         ) : (
           <div className="space-y-2">
