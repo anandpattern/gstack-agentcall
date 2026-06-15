@@ -33,6 +33,14 @@ DEV_USER_ID    = os.environ.get("DEV_USER_ID", "user_dev_local")
 # silently trusting an attacker-supplied header.
 DEV_AUTH_ENABLED = os.environ.get("GSTACK_DEV_AUTH", "") == "1"
 
+# Post-Clerk auth: the web app (Auth.js + Google) mints a short-lived HS256
+# token signed with this shared secret; the broker validates it below. Set the
+# SAME value here and on the web app (AUTH_BROKER_SECRET). While both
+# CLERK_JWKS_URL and AUTH_BROKER_SECRET are set, the broker accepts EITHER
+# token — so the frontend can cut over from Clerk to Google with zero broker
+# downtime. Remove the CLERK_* secrets once the cutover is verified.
+AUTH_BROKER_SECRET = os.environ.get("AUTH_BROKER_SECRET", "")
+
 
 _jwks_cache: dict = {"fetched_at": 0.0, "keys": []}
 
@@ -88,6 +96,21 @@ def verify_jwt(token: str) -> Optional[dict]:
         return None
 
 
+def verify_broker_jwt(token: str) -> Optional[dict]:
+    """Validate an HS256 token minted by the web app (Auth.js + Google →
+    short-lived broker token) with the shared AUTH_BROKER_SECRET. This is the
+    post-Clerk auth path. Returns the claims dict or None."""
+    if not AUTH_BROKER_SECRET:
+        return None
+    try:
+        return jwt.decode(
+            token, AUTH_BROKER_SECRET, algorithms=["HS256"],
+            options={"verify_aud": False},
+        )
+    except jwt.InvalidTokenError:
+        return None
+
+
 def identity_from_request(req: web.Request) -> Optional[dict]:
     """Return {user_id, email, name, source} or None."""
     # 1. Real Clerk JWT in Authorization header.
@@ -101,6 +124,15 @@ def identity_from_request(req: web.Request) -> Optional[dict]:
                 "email":    claims.get("email") or (claims.get("email_addresses") or [{}])[0].get("email_address", ""),
                 "name":     claims.get("name") or claims.get("full_name") or "",
                 "source":   "clerk",
+            }
+        # 1b. Post-Clerk: HS256 token minted by the web app (Auth.js + Google).
+        gclaims = verify_broker_jwt(token)
+        if gclaims:
+            return {
+                "user_id": gclaims.get("sub") or "",
+                "email":   gclaims.get("email") or "",
+                "name":    gclaims.get("name") or "",
+                "source":  "google",
             }
     # 2. Dev fallback — ONLY when Clerk is unconfigured AND dev-auth is
     #    explicitly enabled. Fails closed otherwise (returns None → 401).
