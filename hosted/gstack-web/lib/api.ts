@@ -2,6 +2,8 @@
 import { useAuth, useIsSignedIn } from "@/lib/auth";
 import useSWR, { type SWRResponse } from "swr";
 
+const perfNow = () => (typeof performance !== "undefined" ? performance.now() : 0);
+
 /** Fetch wrapper that attaches the Clerk session JWT to every request. */
 export function useApi() {
   const { getToken } = useAuth();
@@ -10,14 +12,29 @@ export function useApi() {
     path: string,
     init: RequestInit = {},
   ): Promise<T> {
-    const token = await getToken();
+    const t0 = perfNow();
+    const token = await getToken();           // Clerk session token (may hit network)
+    const tTok = perfNow();
     const headers = new Headers(init.headers as HeadersInit);
     if (token) headers.set("Authorization", `Bearer ${token}`);
+    headers.set("X-Client-Token-Ms", String(Math.round(tTok - t0)));  // for broker-side log
     if (init.body && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
     const res = await fetch(path, { ...init, headers });
+    const tFetch = perfNow();
     const json = await res.json().catch(() => ({}));
+    // Perf telemetry — where does a slow request actually spend time?
+    //   token = Clerk getToken() (the "session" suspicion)
+    //   fetch = network round-trip + broker; Server-Timing app=… is the
+    //           broker's own processing, so network ≈ fetch − app.
+    // Open devtools console and filter "[perf]".
+    if (typeof console !== "undefined") {
+      const srv = res.headers.get("Server-Timing") || "";
+      console.debug(
+        `[perf] ${path} token=${Math.round(tTok - t0)}ms fetch=${Math.round(tFetch - tTok)}ms total=${Math.round(tFetch - t0)}ms${srv ? " " + srv : ""}`,
+      );
+    }
     if (!res.ok) {
       throw Object.assign(new Error((json as { error?: string }).error || `${res.status}`), { status: res.status, body: json });
     }

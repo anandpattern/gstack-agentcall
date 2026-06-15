@@ -988,6 +988,26 @@ async def on_cleanup(app: web.Application) -> None:
 
 
 @web.middleware
+async def timing_middleware(req: web.Request, handler):
+    """Perf telemetry. Logs per-/api/ request: server-processing time + the
+    client-reported Clerk getToken() time (X-Client-Token-Ms header). Also
+    exposes server time as a Server-Timing header so the browser can split
+    network vs broker. Lets us see whether slowness is the session (token),
+    the network (client total − app), or the broker/DB (app)."""
+    t0 = time.perf_counter()
+    resp = await handler(req)
+    dur_ms = (time.perf_counter() - t0) * 1000.0
+    if req.path.startswith("/api/"):
+        ctok = req.headers.get("X-Client-Token-Ms", "?")
+        print(f"[perf] {req.method} {req.path} app={dur_ms:.0f}ms client_token={ctok}ms", flush=True)
+    try:
+        resp.headers["Server-Timing"] = f"app;dur={dur_ms:.0f}"
+    except Exception:
+        pass
+    return resp
+
+
+@web.middleware
 async def cors_middleware(req: web.Request, handler):
     if req.method == "OPTIONS":
         return _cors_preflight(req)
@@ -1044,7 +1064,7 @@ async def readyz(req: web.Request) -> web.Response:
 
 
 def build_app() -> web.Application:
-    app = web.Application(middlewares=[cors_middleware, auth.auth_middleware])
+    app = web.Application(middlewares=[timing_middleware, cors_middleware, auth.auth_middleware])
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/readyz", readyz)
     app.router.add_get("/api/me", me)
