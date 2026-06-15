@@ -41,8 +41,11 @@ export default async function middleware(req: NextRequest, evt: unknown) {
 }
 
 export const config = {
+  // Skip _next, static files, AND the broker-proxy routes (/api/*, /healthz,
+  // /readyz). Those are next.config rewrites to the broker, which does its own
+  // auth — running Clerk's middleware on them is pure redundant edge latency on
+  // every single API call. (There are no real Next.js /api routes.)
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
+    "/((?!_next|api/|healthz|readyz|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
 };
