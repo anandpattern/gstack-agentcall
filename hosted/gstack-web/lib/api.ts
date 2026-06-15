@@ -4,6 +4,13 @@ import useSWR, { type SWRResponse } from "swr";
 
 const perfNow = () => (typeof performance !== "undefined" ? performance.now() : 0);
 
+// Call the broker DIRECTLY when NEXT_PUBLIC_BROKER_URL is set (prod), bypassing
+// the Vercel rewrite proxy. That proxy adds ~0.6–1s per call from far regions
+// (measured India→prod: ~1s proxied vs ~0.35s direct). Unset (dev / fallback)
+// → relative path → the next.config rewrite proxy. SWR keys stay the relative
+// path, so caching is unaffected — only the fetch URL changes.
+const BROKER_BASE = (process.env.NEXT_PUBLIC_BROKER_URL || "").replace(/\/$/, "");
+
 /** Fetch wrapper that attaches the Clerk session JWT to every request. */
 export function useApi() {
   const { getToken } = useAuth();
@@ -21,7 +28,8 @@ export function useApi() {
     if (init.body && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
-    const res = await fetch(path, { ...init, headers });
+    const url = BROKER_BASE && path.startsWith("/") ? BROKER_BASE + path : path;
+    const res = await fetch(url, { ...init, headers });
     const tFetch = perfNow();
     const json = await res.json().catch(() => ({}));
     // Perf telemetry — where does a slow request actually spend time?

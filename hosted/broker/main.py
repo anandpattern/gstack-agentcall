@@ -1032,6 +1032,13 @@ def _add_cors(resp: web.StreamResponse, req: web.Request) -> None:
         "authorization, content-type, x-dev-user-id"
         if auth.DEV_AUTH_ENABLED else "authorization, content-type")
     resp.headers["Access-Control-Allow-Methods"]     = "GET, POST, PUT, DELETE, OPTIONS"
+    # Cache the preflight 24h. When the web app calls the broker DIRECTLY
+    # (NEXT_PUBLIC_BROKER_URL set) instead of via the Vercel proxy, the
+    # Authorization header makes every request non-simple → a preflight per
+    # call. Max-Age collapses that to one OPTIONS per day.
+    resp.headers["Access-Control-Max-Age"]           = "86400"
+    # Let the browser read our perf telemetry header on cross-origin responses.
+    resp.headers["Access-Control-Expose-Headers"]    = "Server-Timing"
     resp.headers["Vary"]                             = "Origin"
 
 
