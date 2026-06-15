@@ -130,14 +130,14 @@ function BrokerStatus() {
 function UserPill() {
   const { data: meResp } = useApiSWR<{ user: User }>("/api/me");
   const u = meResp?.user;
-  if (!u) return null;
-  // Prefer real display name (from Clerk); fall back to the local part of
-  // the email, then "you". Avoids showing internal user-id ("user_dev_local")
-  // or raw email when a friendlier label exists.
+  // Do NOT gate the whole pill on `u`. The sign-out control (UserButton) must
+  // stay reachable even when the broker /api/me call is slow or down —
+  // otherwise the user is stuck signed in with no way to log out (the exact
+  // bug hit in testing). Name/email are best-effort; sign-out always renders.
   const displayName =
-    u.display_name?.trim() ||
-    (u.email?.includes("@") ? u.email.split("@")[0] : null) ||
-    "you";
+    u?.display_name?.trim() ||
+    (u?.email?.includes("@") ? u.email.split("@")[0] : null) ||
+    "Account";
   return (
     <>
       <a
