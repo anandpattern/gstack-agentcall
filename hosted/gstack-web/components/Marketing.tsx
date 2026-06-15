@@ -16,6 +16,7 @@ export function Marketing() {
       <SpecialistGrid />
       <InstallBlock />
       <WhyExists />
+      <PoweredByAgentCall />
       <ThanksGarry />
       <Footer />
     </div>
@@ -153,7 +154,7 @@ function BackgroundGlow() {
 function SpecialistGrid() {
   const [selected, setSelected] = useState<MarketingSpecialist | null>(null);
   return (
-    <section className="py-20 border-t border-[var(--color-border)]">
+    <section id="roster" className="py-20 border-t border-[var(--color-border)]">
       <div className="max-w-5xl mx-auto px-6">
         <div className="text-center mb-10">
           <div className="label-cap mb-3">The roster</div>
@@ -379,6 +380,45 @@ function Stat({ n, l, sub }: { n: string; l: string; sub?: string }) {
   );
 }
 
+/* ─── powered by AgentCall ───────────────────────────────────────────
+ * A dedicated section explaining what AgentCall is (the meeting-bridge
+ * tech powering the voice + avatars), with a link out — instead of only
+ * the footer mention. Parallels the "Thanks, Garry" credit section. */
+function PoweredByAgentCall() {
+  return (
+    <section className="py-20 border-t border-[var(--color-border)]">
+      <div className="max-w-5xl mx-auto px-6 grid md:grid-cols-2 gap-10 lg:gap-14 items-center">
+        <div>
+          <div className="label-cap mb-3">Powered by AgentCall</div>
+          <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-tight leading-[1.1] mb-5">
+            The voice and avatars
+            <br className="hidden sm:inline" /> run on AgentCall.
+          </h2>
+          <p className="text-[15px] text-[var(--color-fg-soft)] leading-relaxed mb-4">
+            <a href="https://agentcall.dev" target="_blank" rel="noopener noreferrer" className="text-[var(--color-accent)] underline underline-offset-4">AgentCall</a>
+            {" "}is the platform that lets an AI agent actually join a Google Meet, Zoom, or Teams
+            call — with real-time voice, barge-in, and a live 3D avatar tile. It handles the meeting
+            plumbing so each specialist can simply show up and talk.
+          </p>
+          <p className="text-[15px] text-[var(--color-fg-soft)] leading-relaxed mb-7">
+            Every specialist on this page joins through it. You can bring the same capability to your
+            own agents in a few lines.
+          </p>
+          <a href="https://agentcall.dev" target="_blank" rel="noopener noreferrer" className="btn btn-primary px-5 py-3 text-[13px]">
+            Explore AgentCall →
+          </a>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Stat n="3"   l="platforms"     sub="Meet · Zoom · Teams" />
+          <Stat n="<1s" l="voice latency" sub="barge-in + interrupts" />
+          <Stat n="54"  l="TTS voices"    sub="9 languages" />
+          <Stat n="3"   l="visual modes"  sub="audio · avatar · screenshare" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─── thanks garry ───────────────────────────────────────────────── */
 
 function ThanksGarry() {
@@ -462,7 +502,7 @@ function Footer() {
           <ul className="space-y-1.5 text-[var(--color-fg-soft)]">
             <li><a href="#how" className="hover:text-[var(--color-fg)]">How it works</a></li>
             <li><a href="#install" className="hover:text-[var(--color-fg)]">Install</a></li>
-            <li><Link href="/specialists" className="hover:text-[var(--color-fg)]">Specialists</Link></li>
+            <li><a href="#roster" className="hover:text-[var(--color-fg)]">Specialists</a></li>
             <li><TryNowLink /></li>
           </ul>
         </div>

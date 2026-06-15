@@ -160,9 +160,9 @@ function UserPill() {
           <UserButton />
           <div className="flex-1 min-w-0">
             <div className="truncate font-medium">{displayName}</div>
-            {u.email && <div className="text-[10px] text-[var(--color-muted)] truncate">{u.email}</div>}
+            {u?.email && <div className="text-[10px] text-[var(--color-muted)] truncate">{u.email}</div>}
           </div>
-          {u.role === "admin" && <span className="badge badge-accent">admin</span>}
+          {u?.role === "admin" && <span className="badge badge-accent">admin</span>}
         </div>
       </div>
     </>
