@@ -33,8 +33,8 @@ function Topbar() {
         {/* topbar lockup — lime gstack wordmark / AgentCall's official
             agentcall.dev wordmark (<AgentcallWordmark>), recolored cream. */}
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-[16px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
-          <span className="text-[15px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
+          <span className="text-[17px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
+          <span className="text-[16px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
           <AgentcallWordmark height={19} className="text-[#f4eedd]" />
         </Link>
         <nav className="flex items-center gap-2 text-[13px]">
