@@ -18,18 +18,18 @@ type ClerkLikeHandler = (req: NextRequest, evt: unknown) => Response | Promise<R
 let prodMiddleware: ClerkLikeHandler | null = null;
 async function getProdMiddleware(): Promise<ClerkLikeHandler> {
   if (prodMiddleware) return prodMiddleware;
-  const { clerkMiddleware, createRouteMatcher } = await import("@clerk/nextjs/server");
-  // Everything beyond the marketing landing requires auth. Even
-  // /specialists is a logged-in-only page in production because it reads
-  // per-tenant overrides (description, voice). The landing at "/" is the
-  // only public route — and it renders <SignedOut><Marketing/></SignedOut>
-  // so signed-in users still get the dashboard there.
-  const isProtected = createRouteMatcher([
-    "/workers(.*)", "/admin(.*)",
-    "/specialists(.*)", "/calls(.*)",
-  ]);
-  prodMiddleware = clerkMiddleware(async (auth, req) => {
-    if (isProtected(req)) await auth.protect();
+  const { clerkMiddleware } = await import("@clerk/nextjs/server");
+  // Route protection is handled CLIENT-SIDE (<SignedIn>/<SignedOut> + the
+  // admin Guard), NOT here. Server-side auth.protect() was rewriting the
+  // protected routes (/calls, /workers, /admin) to a 404 even for signed-in
+  // users: with the current Clerk setup the server-side session cookies
+  // (__session/__client_uat) aren't reliably present, so the middleware saw
+  // every request as signed-out (x-clerk-auth-reason:
+  // session-token-and-uat-missing). The client session works fine (the
+  // dashboard proves it), so we gate in the browser instead. clerkMiddleware
+  // still runs (ClerkProvider needs it) but no longer blocks any route.
+  prodMiddleware = clerkMiddleware(async () => {
+    /* no server-side protection — see note above */
   }) as unknown as ClerkLikeHandler;
   return prodMiddleware;
 }

@@ -5,8 +5,13 @@ import { useToast } from "@/lib/toast";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { AsyncState } from "@/components/AsyncState";
 import type { Worker, WorkerKey } from "@/lib/types";
+import { Authed } from "@/components/Authed";
 
 export default function WorkersPage() {
+  return <Authed><WorkersContent /></Authed>;
+}
+
+function WorkersContent() {
   const call = useApi();
   const toast = useToast();
   const { data: keysResp, error: keysError, isLoading: keysLoading, mutate: refreshKeys } = useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");

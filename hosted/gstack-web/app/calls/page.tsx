@@ -2,8 +2,13 @@
 import { useApiSWR } from "@/lib/api";
 import { AsyncState } from "@/components/AsyncState";
 import type { Assignment } from "@/lib/types";
+import { Authed } from "@/components/Authed";
 
 export default function CallsPage() {
+  return <Authed><CallsContent /></Authed>;
+}
+
+function CallsContent() {
   const { data, error, isLoading } = useApiSWR<{ assignments: Assignment[] }>("/api/assignments");
   const items = data?.assignments ?? [];
 
