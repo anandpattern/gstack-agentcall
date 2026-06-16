@@ -36,4 +36,15 @@ export const useIsSignedIn: () => boolean = DEV
       return !!(isLoaded && isSignedIn);
     };
 
+/** Like useIsSignedIn but ALSO reports whether the auth provider has finished
+ * loading (`ready`). Data hooks use this to show a loading state while Clerk
+ * is still initializing instead of a misleading empty state — a slow Clerk
+ * init otherwise looks like "nothing loads". In dev (stub), auth is instant. */
+export const useAuthGate: () => { ready: boolean; signedIn: boolean } = DEV
+  ? () => ({ ready: true, signedIn: Stub.useStubIsSignedIn() })
+  : () => {
+      const { isLoaded, isSignedIn } = useUserReal();
+      return { ready: isLoaded, signedIn: !!(isLoaded && isSignedIn) };
+    };
+
 export const isDevAuth = DEV;

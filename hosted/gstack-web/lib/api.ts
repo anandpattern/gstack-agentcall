@@ -1,5 +1,5 @@
 "use client";
-import { useAuth, useIsSignedIn } from "@/lib/auth";
+import { useAuth, useAuthGate } from "@/lib/auth";
 import useSWR, { type SWRResponse } from "swr";
 
 const perfNow = () => (typeof performance !== "undefined" ? performance.now() : 0);
@@ -64,11 +64,19 @@ export function useApiSWR<T = unknown>(
   opts: { allowSignedOut?: boolean; refreshInterval?: number } = {},
 ): SWRResponse<T> {
   const call = useApi();
-  const signedIn = useIsSignedIn();
+  const { ready, signedIn } = useAuthGate();
   const key = path && (signedIn || opts.allowSignedOut) ? path : null;
-  return useSWR<T>(
+  const swr = useSWR<T>(
     key,
     async (p: string) => call<T>(p),
     opts.refreshInterval ? { refreshInterval: opts.refreshInterval } : undefined,
   );
+  // Auth-init gating: until Clerk resolves, a protected key is null, so SWR
+  // reports isLoading=false — which makes pages render their EMPTY state
+  // ("No calls yet") instead of a spinner, so a slow sign-in looks like
+  // "nothing loads". Report loading while auth is still pending.
+  if (path && !opts.allowSignedOut && !ready) {
+    return { ...swr, isLoading: true } as SWRResponse<T>;
+  }
+  return swr;
 }
