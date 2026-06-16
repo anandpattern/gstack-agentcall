@@ -5,6 +5,7 @@ import { SignInButton, SignedIn, SignedOut } from "@/lib/auth";
 import { isDevAuth } from "@/lib/auth-mode";
 import { SPECIALISTS, type MarketingSpecialist } from "@/lib/specialists-static";
 import { SpecialistDetailModal } from "./SpecialistDetailModal";
+import { AgentcallWordmark } from "./AgentcallWordmark";
 
 export function Marketing() {
   return (
@@ -34,10 +35,9 @@ function Topbar() {
             shrunk to 28px the tagline would be mush, so the topbar gets the
             wordmark row rebuilt in text. */}
         <Link href="/" className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-fg)] flex items-center justify-center font-bold text-sm mr-0.5">G</span>
-          <span className="text-[15px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
-          <span className="text-[12px] font-bold" style={{ color: "#ff6b2b" }}>✕</span>
-          <span className="text-[15px] font-semibold tracking-tight" style={{ color: "#f4eedd" }}>agentcall</span>
+          <span className="text-[16px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
+          <span className="text-[15px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
+          <AgentcallWordmark height={16} className="text-[#f4eedd]" />
         </Link>
         <nav className="flex items-center gap-2 text-[13px]">
           <a href="#how" className="hidden sm:inline px-3 py-1.5 text-[var(--color-fg-soft)] hover:text-[var(--color-fg)]">How it works</a>
@@ -486,13 +486,11 @@ function Footer() {
     <footer className="py-12 border-t border-[var(--color-border)]">
       <div className="max-w-5xl mx-auto px-6 grid md:grid-cols-4 gap-8 text-[13px]">
         <div className="md:col-span-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logos/gstack-x-agentcall-lockup.svg"
-            alt="gstack × agentcall — joins your meeting"
-            width={570} height={115}
-            className="h-12 w-auto mb-4"
-          />
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-[26px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
+            <span className="text-[24px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
+            <AgentcallWordmark height={26} className="text-[#f4eedd]" />
+          </div>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-md">
             An open-source bridge from <a className="underline" href="https://github.com/garrytan/gstack" target="_blank" rel="noopener noreferrer">gstack</a> to live voice meetings via <a className="underline" href="https://agentcall.dev" target="_blank" rel="noopener noreferrer">AgentCall</a>. MIT. Built by <a className="underline" href="https://github.com/pattern-ai-labs" target="_blank" rel="noopener noreferrer">Pattern AI Labs</a>.
           </p>

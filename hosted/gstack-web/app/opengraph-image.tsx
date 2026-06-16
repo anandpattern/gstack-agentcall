@@ -1,34 +1,17 @@
 import { ImageResponse } from "next/og";
 
 // OG image — generated at build time, served at /opengraph-image.
-// Mirrors the brand lockup (public/logos/gstack-x-agentcall-lockup.svg):
-// lime gstack ✕ cream agentcall over the JOINS YOUR MEETING tagline.
-// The ✕ is drawn as two rotated bars instead of a text glyph — Satori's
-// bundled Inter subset may not include U+2715 and we'd ship tofu.
+// Brand lockup: lime gstack / cream agentcall.dev over the JOINS YOUR MEETING
+// tagline. Text-based (Satori) so it renders without bundling the AgentCall
+// wordmark paths into the edge image.
 export const runtime = "edge";
-export const alt = "gstack × agentcall — joins your meeting";
+export const alt = "gstack / agentcall.dev — joins your meeting";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 const LIME = "#c8ff3a";
 const CREAM = "#f4eedd";
-const ORANGE = "#ff6b2b";
 const INK_BG = "#07080a";
-
-function Cross() {
-  return (
-    <div style={{ display: "flex", position: "relative", width: 72, height: 72, margin: "0 28px" }}>
-      <div style={{
-        position: "absolute", left: 31, top: 2, width: 11, height: 68,
-        background: ORANGE, borderRadius: 6, transform: "rotate(45deg)",
-      }} />
-      <div style={{
-        position: "absolute", left: 31, top: 2, width: 11, height: 68,
-        background: ORANGE, borderRadius: 6, transform: "rotate(-45deg)",
-      }} />
-    </div>
-  );
-}
 
 export default async function OpengraphImage() {
   return new ImageResponse(
@@ -68,9 +51,9 @@ export default async function OpengraphImage() {
         {/* center: the lockup */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 34 }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <span style={{ fontSize: 104, fontWeight: 800, letterSpacing: -4, color: LIME }}>gstack</span>
-            <Cross />
-            <span style={{ fontSize: 104, fontWeight: 800, letterSpacing: -4, color: CREAM }}>agentcall</span>
+            <span style={{ fontSize: 90, fontWeight: 800, letterSpacing: -4, color: LIME }}>gstack</span>
+            <span style={{ fontSize: 80, fontWeight: 300, color: "#5c6052", margin: "0 26px" }}>/</span>
+            <span style={{ fontSize: 90, fontWeight: 800, letterSpacing: -4, color: CREAM }}>agentcall.dev</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 26 }}>
             <div style={{ width: 120, height: 2, background: "#5c6052" }} />

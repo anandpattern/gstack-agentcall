@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth";
 import { useApiSWR } from "@/lib/api";
 import type { User } from "@/lib/types";
+import { AgentcallWordmark } from "@/components/AgentcallWordmark";
 
 // Member nav — visible to everyone signed in. Just the action surface.
 // BYOB lives here so members who hit the "pool busy" modal can find
@@ -30,13 +31,12 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex w-56 shrink-0 h-screen sticky top-0 border-r border-[var(--color-border)] flex-col">
       <div className="px-5 pt-5 pb-6">
-        {/* gstack × agentcall lockup — matches the landing topbar/footer.
-            G tile + wordmark at 14px fits the 224px sidebar. */}
-        <Link href="/" className="flex items-center gap-1.5 group">
-          <span className="w-7 h-7 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-fg)] flex items-center justify-center font-bold text-sm shadow-[0_0_0_3px_var(--color-accent-soft)] mr-0.5">G</span>
-          <span className="text-[14px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
-          <span className="text-[11px] font-bold" style={{ color: "#ff6b2b" }}>✕</span>
-          <span className="text-[14px] font-semibold tracking-tight" style={{ color: "#f4eedd" }}>agentcall</span>
+        {/* gstack / agentcall.dev lockup — gstack wordmark + AgentCall's
+            official wordmark (their mark + lettering). Matches topbar/footer. */}
+        <Link href="/" className="flex items-center gap-2 group">
+          <span className="text-[15px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
+          <span className="text-[14px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
+          <AgentcallWordmark height={15} className="text-[#f4eedd]" />
         </Link>
       </div>
 

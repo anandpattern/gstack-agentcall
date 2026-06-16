@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@/lib/auth";
 import { useApiSWR } from "@/lib/api";
 import type { User } from "@/lib/types";
+import { AgentcallWordmark } from "@/components/AgentcallWordmark";
 
 /**
  * Mobile-only top bar. Replaces the desktop sidebar below md (768px).
@@ -32,11 +33,10 @@ export function MobileHeader() {
     <>
       <header className="md:hidden sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/90 backdrop-blur-md">
         <div className="px-4 h-14 flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-1.5" onClick={() => setOpen(false)}>
-            <span className="w-7 h-7 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-fg)] flex items-center justify-center font-bold text-sm mr-0.5">G</span>
-            <span className="font-semibold text-[14px] text-[var(--color-accent)]">gstack</span>
-            <span className="text-[11px] font-bold" style={{ color: "#ff6b2b" }}>✕</span>
-            <span className="font-semibold text-[14px]" style={{ color: "#f4eedd" }}>agentcall</span>
+          <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
+            <span className="font-semibold text-[15px] tracking-tight text-[var(--color-accent)]">gstack</span>
+            <span className="text-[14px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
+            <AgentcallWordmark height={15} className="text-[#f4eedd]" />
           </Link>
           <MobileStatus />
           <div className="ml-auto flex items-center gap-2">
