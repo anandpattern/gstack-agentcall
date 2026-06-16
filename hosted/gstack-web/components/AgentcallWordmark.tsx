@@ -10,9 +10,9 @@ export function AgentcallWordmark({
 }) {
   return (
     <svg
-      viewBox="0 0 2022 400"
+      viewBox="0 71 1975 244"
       height={height}
-      width={(height * 2022) / 400}
+      width={(height * 1975) / 244}
       className={className}
       fill="currentColor"
       role="img"

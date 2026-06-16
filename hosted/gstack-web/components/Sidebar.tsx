@@ -36,7 +36,7 @@ export function Sidebar() {
         <Link href="/" className="flex items-center gap-2 group">
           <span className="text-[15px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
           <span className="text-[14px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
-          <AgentcallWordmark height={15} className="text-[#f4eedd]" />
+          <AgentcallWordmark height={17} className="text-[#f4eedd]" />
         </Link>
       </div>
 

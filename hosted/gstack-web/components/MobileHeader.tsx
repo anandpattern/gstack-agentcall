@@ -36,7 +36,7 @@ export function MobileHeader() {
           <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
             <span className="font-semibold text-[15px] tracking-tight text-[var(--color-accent)]">gstack</span>
             <span className="text-[14px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
-            <AgentcallWordmark height={15} className="text-[#f4eedd]" />
+            <AgentcallWordmark height={17} className="text-[#f4eedd]" />
           </Link>
           <MobileStatus />
           <div className="ml-auto flex items-center gap-2">

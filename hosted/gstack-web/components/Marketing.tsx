@@ -37,7 +37,7 @@ function Topbar() {
         <Link href="/" className="flex items-center gap-2">
           <span className="text-[16px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
           <span className="text-[15px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
-          <AgentcallWordmark height={16} className="text-[#f4eedd]" />
+          <AgentcallWordmark height={19} className="text-[#f4eedd]" />
         </Link>
         <nav className="flex items-center gap-2 text-[13px]">
           <a href="#how" className="hidden sm:inline px-3 py-1.5 text-[var(--color-fg-soft)] hover:text-[var(--color-fg)]">How it works</a>
@@ -489,7 +489,7 @@ function Footer() {
           <div className="flex items-center gap-3 mb-4">
             <span className="text-[26px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
             <span className="text-[24px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
-            <AgentcallWordmark height={26} className="text-[#f4eedd]" />
+            <AgentcallWordmark height={30} className="text-[#f4eedd]" />
           </div>
           <p className="text-[12px] text-[var(--color-muted)] leading-relaxed max-w-md">
             An open-source bridge from <a className="underline" href="https://github.com/garrytan/gstack" target="_blank" rel="noopener noreferrer">gstack</a> to live voice meetings via <a className="underline" href="https://agentcall.dev" target="_blank" rel="noopener noreferrer">AgentCall</a>. MIT. Built by <a className="underline" href="https://github.com/pattern-ai-labs" target="_blank" rel="noopener noreferrer">Pattern AI Labs</a>.
