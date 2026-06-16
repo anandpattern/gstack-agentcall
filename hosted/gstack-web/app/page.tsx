@@ -6,7 +6,8 @@ import { ActiveCallsRail } from "@/components/ActiveCallsRail";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { MemberActiveCalls } from "@/components/MemberActiveCalls";
 import { useApiSWR } from "@/lib/api";
-import type { User, Worker } from "@/lib/types";
+import Link from "next/link";
+import type { User, Worker, WorkerKey } from "@/lib/types";
 
 export default function Home() {
   return (
@@ -49,8 +50,37 @@ function AdminDashboard() {
 function MemberDashboard() {
   return (
     <div className="flex-1 min-w-0 px-6 lg:px-8 py-6 xl:py-8 max-w-4xl mx-auto">
+      <MyBrainStatus />
       <MemberActiveCalls />
       <DispatchPanel />
     </div>
+  );
+}
+
+/* A member who brought their own brain sees its live status here — green when a
+ * brain key is connected (dispatches can run on their machine), muted when
+ * registered-but-offline. Pool-only members (no keys) see nothing. Polls every
+ * 10s so the dot flips as the brain connects/disconnects. */
+function MyBrainStatus() {
+  const { data: keysResp } = useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
+  const { data: workersResp } = useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 10000 });
+  const keys = (keysResp?.keys ?? []).filter((k) => !k.revoked);
+  if (keys.length === 0) return null;
+  const workers = workersResp?.workers ?? [];
+  const online = keys.filter((k) => workers.some((w) => w.name === k.label));
+  const live = online.length > 0;
+  return (
+    <Link href="/byob" className="card flex items-center gap-3 mb-6 hover:bg-[var(--color-panel-2)] transition">
+      <span className={`dot ${live ? "dot-ok pulse" : "dot-mute"}`} />
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-[13.5px]">{live ? "Your brain is live" : "Your brain is offline"}</div>
+        <div className="text-[11.5px] text-[var(--color-muted)]">
+          {live
+            ? `${online.length} of ${keys.length} online — dispatches can run on your machine`
+            : `${keys.length} brain${keys.length > 1 ? "s" : ""} registered · start it on your laptop`}
+        </div>
+      </div>
+      <span className="text-[12px] text-[var(--color-muted)] shrink-0">Manage →</span>
+    </Link>
   );
 }
