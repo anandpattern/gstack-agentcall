@@ -30,10 +30,8 @@ function Topbar() {
   return (
     <header className="sticky top-0 z-40 glass border-b border-[var(--color-border)]">
       <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-        {/* topbar lockup — variant D at DOM scale: lime gstack, orange ✕,
-            cream agentcall. The full SVG (with tagline) stays in the footer;
-            shrunk to 28px the tagline would be mush, so the topbar gets the
-            wordmark row rebuilt in text. */}
+        {/* topbar lockup — lime gstack wordmark / AgentCall's official
+            agentcall.dev wordmark (<AgentcallWordmark>), recolored cream. */}
         <Link href="/" className="flex items-center gap-2">
           <span className="text-[16px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
           <span className="text-[15px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>

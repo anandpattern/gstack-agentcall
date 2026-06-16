@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { SignIn } from "@clerk/nextjs";
 import { isDevAuth } from "@/lib/auth-mode";
+import { AgentcallWordmark } from "@/components/AgentcallWordmark";
 
 export default function SignInPage() {
   return (
@@ -17,9 +18,10 @@ function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-8 anim-fade">
       <div className="max-w-md w-full">
-        <Link href="/" className="flex items-center gap-2 mb-8 justify-center">
-          <span className="w-9 h-9 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-fg)] flex items-center justify-center font-bold">G</span>
-          <span className="text-[18px] font-semibold">gstack</span>
+        <Link href="/" className="flex items-center gap-2.5 mb-8 justify-center">
+          <span className="text-[18px] font-semibold tracking-tight text-[var(--color-accent)]">gstack</span>
+          <span className="text-[17px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
+          <AgentcallWordmark height={20} className="text-[#f4eedd]" />
         </Link>
         {children}
       </div>
