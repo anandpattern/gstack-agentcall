@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useApi } from "@/lib/api";
+import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
+import type { User } from "@/lib/types";
 
 /**
  * Shown on the dashboard when the user has 0 online brains.
@@ -10,7 +11,18 @@ import { useToast } from "@/lib/toast";
 export function OnboardingFlow({ onMinted }: { onMinted: () => void }) {
   const call = useApi();
   const toast = useToast();
-  const [label, setLabel] = useState("my-laptop");
+  const { data: meResp } = useApiSWR<{ user: User }>("/api/me");
+  // Pre-fill a personal, distinct brain name from the signed-in user, so two
+  // people don't both end up with "my-laptop". The field stays editable —
+  // until the user types, we show the suggestion; after, their value wins.
+  const suggested = (() => {
+    const u = meResp?.user;
+    const base = (u?.display_name?.trim().split(/\s+/)[0] || u?.email?.split("@")[0] || "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    return base ? `${base}-laptop` : "my-laptop";
+  })();
+  const [label, setLabel] = useState<string | null>(null);
+  const labelValue = label ?? suggested;
   const [pending, setPending] = useState(false);
   const [key, setKey] = useState<string | null>(null);
 
@@ -18,7 +30,7 @@ export function OnboardingFlow({ onMinted }: { onMinted: () => void }) {
     setPending(true);
     try {
       const r = await call<{ worker_key: string }>("/api/worker-keys", {
-        method: "POST", body: JSON.stringify({ label: label.trim() || "my-laptop" }),
+        method: "POST", body: JSON.stringify({ label: labelValue.trim() || "my-laptop" }),
       });
       setKey(r.worker_key);
       toast.push({ kind: "ok", title: "Brain key created", body: "Copy it now — it's hashed at rest." });
@@ -58,9 +70,10 @@ python3 ~/gstack-joins-meeting/worker.py`
       {!key ? (
         <div className="flex gap-2 max-w-md">
           <input
-            value={label} onChange={(e) => setLabel(e.target.value)}
+            value={labelValue} onChange={(e) => setLabel(e.target.value)}
             placeholder="Brain label (e.g. macbook-air)"
             className="flex-1"
+            aria-label="Brain label"
           />
           <button className="btn btn-primary" disabled={pending} onClick={mint}>
             {pending ? "Creating…" : "Create brain"}
