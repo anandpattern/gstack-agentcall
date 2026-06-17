@@ -1,16 +1,40 @@
 "use client";
 import Link from "next/link";
-import { SignIn } from "@clerk/nextjs";
+import { signIn } from "next-auth/react";
 import { isDevAuth } from "@/lib/auth-mode";
 import { AgentcallWordmark } from "@/components/AgentcallWordmark";
 
 export default function SignInPage() {
   return (
     <AuthShell>
-      {isDevAuth()
-        ? <DevNotice mode="sign-in" />
-        : <SignIn appearance={{ variables: { colorPrimary: "#b9f450" } }} />}
+      {isDevAuth() ? <DevNotice mode="sign-in" /> : <GoogleSignIn label="Sign in" />}
     </AuthShell>
+  );
+}
+
+function GoogleSignIn({ label }: { label: string }) {
+  return (
+    <div className="card text-center p-8">
+      <h2 className="text-[16px] font-semibold mb-1">{label} to gstack</h2>
+      <p className="text-[12.5px] text-[var(--color-fg-soft)] mb-6">Continue with your Google account.</p>
+      <button
+        onClick={() => signIn("google", { callbackUrl: "/" })}
+        className="btn btn-primary w-full inline-flex items-center justify-center gap-2.5"
+      >
+        <GoogleGlyph /> Continue with Google
+      </button>
+    </div>
+  );
+}
+
+function GoogleGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.02-3.71H.96v2.33A9 9 0 0 0 9 18z" />
+      <path fill="#FBBC05" d="M3.98 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3.02-2.33z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3.02 2.34C4.68 5.16 6.66 3.58 9 3.58z" />
+    </svg>
   );
 }
 
@@ -35,9 +59,10 @@ function DevNotice({ mode }: { mode: "sign-in" | "sign-up" }) {
       <div className="text-[32px] mb-3 opacity-40">⚡</div>
       <h2 className="text-[16px] font-semibold mb-2">Dev mode — no {mode} required</h2>
       <p className="text-[12.5px] text-[var(--color-fg-soft)] mb-5">
-        The frontend isn't configured with a Clerk publishable key, so it's running with
-        a synthetic dev user (auto-promoted to admin). To enable real auth, set
-        <code className="mono mx-1">NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> in <code className="mono">.env.local</code>.
+        Running with a synthetic dev user (auto-promoted to admin) because Google auth
+        isn't configured here. To enable real sign-in, set
+        <code className="mono mx-1">NEXT_PUBLIC_AUTH_PROVIDER=google</code> plus the
+        <code className="mono mx-1">AUTH_GOOGLE_ID</code>/<code className="mono">AUTH_GOOGLE_SECRET</code> env vars.
       </p>
       <Link href="/" className="btn btn-primary inline-flex">Enter dashboard</Link>
     </div>

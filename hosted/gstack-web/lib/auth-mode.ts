@@ -3,6 +3,8 @@
  * time (layout, middleware) and at client-render time (page bundles).
  */
 export function isDevAuth(): boolean {
-  const k = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "";
-  return !k.startsWith("pk_live_") && !k.startsWith("pk_test_");
+  // Real Google auth (Auth.js) is on when NEXT_PUBLIC_AUTH_PROVIDER=google
+  // (set in prod + preview). Unset (local dev with no Google creds) → the
+  // synthetic stub user, so the app still runs locally without auth config.
+  return process.env.NEXT_PUBLIC_AUTH_PROVIDER !== "google";
 }
