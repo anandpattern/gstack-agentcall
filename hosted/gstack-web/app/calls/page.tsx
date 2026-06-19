@@ -13,9 +13,9 @@ function CallsContent() {
   const items = data?.assignments ?? [];
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8 anim-fade">
+    <div className="max-w-5xl mx-auto px-4 sm:px-8 py-8 anim-fade">
       <header className="mb-6">
-        <h1 className="text-[26px] font-semibold tracking-tight">Calls</h1>
+        <h1 className="text-[22px] sm:text-[26px] font-semibold tracking-tight">Calls</h1>
         <p className="text-[13px] text-[var(--color-fg-soft)] mt-1">
           Every dispatch you've made. Active calls appear at the top.
         </p>
@@ -28,8 +28,8 @@ function CallsContent() {
           No calls yet. Head to the dashboard, paste a Meet URL, dispatch.
         </div>
       ) : (
-        <div className="surface overflow-hidden">
-          <table className="w-full text-[12.5px]">
+        <div className="surface overflow-x-auto">
+          <table className="w-full text-[12.5px] min-w-[640px]">
             <thead className="bg-[var(--color-panel-2)] text-[10px] uppercase tracking-wider text-[var(--color-muted)]">
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold">Status</th>

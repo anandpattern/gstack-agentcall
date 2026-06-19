@@ -28,9 +28,9 @@ export default function AdminPage() {
   const activeNow = assignments.filter((a) => a.status === "started").length;
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8 anim-fade space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-8 py-8 anim-fade space-y-8">
       <header>
-        <h1 className="text-[26px] font-semibold tracking-tight">Admin</h1>
+        <h1 className="text-[22px] sm:text-[26px] font-semibold tracking-tight">Admin</h1>
         <p className="text-[13px] text-[var(--color-fg-soft)] mt-1">
           You see everything: every user, every brain, every dispatch.
         </p>
@@ -47,8 +47,8 @@ export default function AdminPage() {
       {/* users */}
       <section>
         <h2 className="text-[15px] font-semibold mb-3">All users</h2>
-        <div className="surface overflow-hidden">
-          <table className="w-full text-[12.5px]">
+        <div className="surface overflow-x-auto">
+          <table className="w-full text-[12.5px] min-w-[460px]">
             <thead className="bg-[var(--color-panel-2)] text-[10px] uppercase tracking-wider text-[var(--color-muted)]">
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold">User</th>
@@ -112,8 +112,8 @@ export default function AdminPage() {
       {/* recent dispatches */}
       <section>
         <h2 className="text-[15px] font-semibold mb-3">Recent dispatches</h2>
-        <div className="surface overflow-hidden">
-          <table className="w-full text-[12.5px]">
+        <div className="surface overflow-x-auto">
+          <table className="w-full text-[12.5px] min-w-[520px]">
             <thead className="bg-[var(--color-panel-2)] text-[10px] uppercase tracking-wider text-[var(--color-muted)]">
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold">Status</th>

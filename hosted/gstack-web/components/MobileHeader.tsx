@@ -32,11 +32,11 @@ export function MobileHeader() {
   return (
     <>
       <header className="md:hidden sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/90 backdrop-blur-md">
-        <div className="px-4 h-14 flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-            <span className="font-semibold text-[15px] tracking-tight text-[var(--color-accent)]">gstack</span>
-            <span className="text-[14px] font-light leading-none" style={{ color: "#5c6052" }}>/</span>
-            <AgentcallWordmark height={17} className="text-[#f4eedd]" />
+        <div className="px-4 h-14 flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-1.5 min-w-0" onClick={() => setOpen(false)}>
+            <span className="font-semibold text-[15px] tracking-tight text-[var(--color-accent)] shrink-0">gstack</span>
+            <span className="text-[14px] font-light leading-none shrink-0" style={{ color: "#5c6052" }}>/</span>
+            <AgentcallWordmark height={16} className="text-[#f4eedd] shrink-0" />
           </Link>
           <MobileStatus />
           <div className="ml-auto flex items-center gap-2">

@@ -60,13 +60,13 @@ function Hero() {
   return (
     <section className="relative overflow-hidden">
       <BackgroundGlow />
-      <div className="max-w-5xl mx-auto px-6 pt-24 pb-20 text-center">
-        <div className="inline-flex items-center gap-2 chip mb-7 anim-up">
-          <span className="dot dot-ok pulse" />
-          <span className="mono text-[11px]">live · 19 specialists · 6 team presets · MIT</span>
+      <div className="max-w-5xl mx-auto px-6 pt-16 sm:pt-24 pb-16 sm:pb-20 text-center">
+        <div className="inline-flex items-center gap-2 chip mb-6 sm:mb-7 anim-up max-w-full">
+          <span className="dot dot-ok pulse shrink-0" />
+          <span className="mono text-[10px] sm:text-[11px] truncate">live · 19 specialists · 6 team presets · MIT</span>
         </div>
 
-        <h1 className="text-[64px] sm:text-[88px] leading-[0.95] tracking-[-0.04em] font-semibold anim-up" style={{ animationDelay: "60ms" }}>
+        <h1 className="text-[40px] sm:text-[64px] md:text-[88px] leading-[1.0] sm:leading-[0.95] tracking-[-0.03em] sm:tracking-[-0.04em] font-semibold anim-up" style={{ animationDelay: "60ms" }}>
           <span className="gradient-text">gstack</span> joins<br/>your meeting.
         </h1>
 
@@ -88,7 +88,7 @@ function Hero() {
           </span>
         </p>
 
-        <div className="flex items-center justify-center gap-3 mt-10 anim-up" style={{ animationDelay: "220ms" }}>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-10 anim-up" style={{ animationDelay: "220ms" }}>
           <TryNowButton />
           <a
             href="https://github.com/pattern-ai-labs/gstack-joins-meeting"

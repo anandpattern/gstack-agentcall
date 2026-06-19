@@ -202,7 +202,7 @@ export function DispatchPanel() {
       {/* HERO */}
       <section className="surface p-6 anim-up">
         <div className="flex items-end gap-3 mb-1 flex-wrap">
-          <h1 className="text-[26px] font-semibold tracking-tight">Dispatch your team</h1>
+          <h1 className="text-[20px] sm:text-[26px] font-semibold tracking-tight">Dispatch your team</h1>
           <span className="text-[12px] text-[var(--color-muted)] mb-1">{all.length} specialists · {TEAMS.length} team presets</span>
           <a
             href="https://github.com/garrytan/gstack"
@@ -334,7 +334,7 @@ export function DispatchPanel() {
         }`}
       >
         <div
-          className="rounded-full pl-6 pr-2 py-2 flex items-center gap-5 shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[var(--color-border-2)] pointer-events-auto"
+          className="rounded-full pl-4 sm:pl-6 pr-2 py-2 flex items-center gap-3 sm:gap-5 shadow-[0_12px_40px_rgba(0,0,0,0.55)] border border-[var(--color-border-2)] pointer-events-auto max-w-[calc(100vw-2rem)]"
           style={{
             // Mostly opaque (95% panel) instead of the heavier-glass 70%;
             // keeps the dark-mode feel but reads as a solid CTA.
@@ -354,7 +354,7 @@ export function DispatchPanel() {
             Clear
           </button>
           <button
-            className="btn btn-primary px-6 py-2.5 text-[14px] rounded-full"
+            className="btn btn-primary px-5 sm:px-6 py-2.5 text-[14px] rounded-full whitespace-nowrap"
             disabled={pending || !meetUrl.trim()}
             onClick={dispatch}
             title={!meetUrl.trim() ? "Paste a meeting URL above first" : undefined}

@@ -20,7 +20,7 @@ export default function ByobPage() {
       <Link href="/" className="text-[12px] text-[var(--color-muted)] hover:text-[var(--color-fg)]">← back to dashboard</Link>
 
       <header className="mt-4 mb-8">
-        <h1 className="text-[32px] font-semibold tracking-tight">Bring your own brain</h1>
+        <h1 className="text-[24px] sm:text-[32px] font-semibold tracking-tight">Bring your own brain</h1>
         <p className="text-[14px] text-[var(--color-fg-soft)] mt-2 leading-relaxed max-w-2xl">
           Skip the shared demo pool. Run your own brain on your own laptop —
           dispatches route to it first, you never wait in line.

@@ -137,7 +137,7 @@ function CallCard({ a, onEnd }: { a: Assignment; onEnd: () => void }) {
         className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--color-accent)]"
         style={{ boxShadow: "0 0 18px var(--color-accent-ring)" }}
       />
-      <div className="p-4 flex items-center gap-4">
+      <div className="p-4 flex flex-wrap items-center gap-3 sm:gap-4">
         <AvatarStack ids={a.specialists} pl />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
@@ -153,16 +153,16 @@ function CallCard({ a, onEnd }: { a: Assignment; onEnd: () => void }) {
             <span className="truncate">{meetHost}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0">
           <a
             href={a.meet_url}
             target="_blank" rel="noopener noreferrer"
-            className="btn btn-outline text-[12px] py-1.5 px-3"
+            className="btn btn-outline text-[12px] py-1.5 px-3 flex-1 sm:flex-none justify-center"
             title="Open the Meet in a new tab"
           >
             Open meet
           </a>
-          <button className="btn btn-danger text-[12px] py-1.5 px-3" onClick={onEnd}>
+          <button className="btn btn-danger text-[12px] py-1.5 px-3 flex-1 sm:flex-none justify-center" onClick={onEnd}>
             End call
           </button>
         </div>

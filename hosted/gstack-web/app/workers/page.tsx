@@ -35,9 +35,9 @@ function WorkersContent() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-8 py-8 anim-fade">
+    <div className="max-w-4xl mx-auto px-4 sm:px-8 py-8 anim-fade">
       <header className="mb-8">
-        <h1 className="text-[26px] font-semibold tracking-tight">Brains</h1>
+        <h1 className="text-[22px] sm:text-[26px] font-semibold tracking-tight">Brains</h1>
         <p className="text-[13px] text-[var(--color-fg-soft)] mt-1">
           One brain per machine. Each brain is a Claude Code session on your laptop that powers the bots.
         </p>
@@ -67,7 +67,7 @@ function WorkersContent() {
                     <div className="font-medium text-[13.5px]">{k.label}</div>
                     <div className="text-[11px] text-[var(--color-muted)] mono">{k.key_hash_prefix}</div>
                   </div>
-                  <div className="text-[11px] text-[var(--color-muted)] text-right">
+                  <div className="hidden sm:block text-[11px] text-[var(--color-muted)] text-right shrink-0">
                     {k.last_seen_at
                       ? <>seen {new Date(k.last_seen_at).toLocaleString()}</>
                       : <>never connected</>}

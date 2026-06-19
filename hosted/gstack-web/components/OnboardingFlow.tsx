@@ -60,7 +60,7 @@ python3 ~/gstack-joins-meeting/worker.py`
   return (
     <div className="surface p-8 anim-up">
       <div className="flex items-center gap-3 mb-6">
-        <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold">1</span>
+        <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">1</span>
         <div>
           <div className="font-semibold text-[15px]">Get your first brain online</div>
           <div className="text-[13px] text-[var(--color-muted)]">A brain is a Claude Code session on your laptop that powers the bots — your laptop is fine.</div>
@@ -90,19 +90,19 @@ python3 ~/gstack-joins-meeting/worker.py`
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold">2</span>
+            <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">2</span>
             <div className="flex-1">
               <div className="font-semibold text-[14px]">Run this on your laptop</div>
               <div className="text-[12px] text-[var(--color-muted)]">Installs gstack, saves the key, starts the brain.</div>
             </div>
-            <button className="btn btn-primary text-[12px]" onClick={() => copy(install!, "Command")}>Copy</button>
+            <button className="btn btn-primary text-[12px] shrink-0" onClick={() => copy(install!, "Command")}>Copy</button>
           </div>
           <pre className="surface p-4 bg-[var(--color-bg-soft)] text-[11.5px] mono leading-relaxed overflow-x-auto whitespace-pre-wrap">
 {install}
           </pre>
 
           <div className="flex items-center gap-3 pt-2">
-            <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold">3</span>
+            <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">3</span>
             <div className="flex-1">
               <div className="font-semibold text-[14px]">Wait for the green dot</div>
               <div className="text-[12px] text-[var(--color-muted)]">Once the brain connects, it shows up in the right rail. Then dispatch.</div>
