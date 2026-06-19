@@ -29,11 +29,14 @@ export function SpecialistCard({
           loading="lazy"
         />
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-medium text-[14px]">{s.card_name || s.name}</span>
-            {selected && <span className="badge badge-accent">picked</span>}
+          <div className="flex items-start justify-between gap-1.5">
+            <span className="font-medium text-[14px] leading-tight min-w-0">{s.card_name || s.name}</span>
+            {/* The green ring already signals "picked"; the text badge is
+                redundant on narrow 2-col mobile cards (it cut to "PICK…" and
+                starved the title), so only show it from sm: up. */}
+            {selected && <span className="badge badge-accent shrink-0 hidden sm:inline-flex">picked</span>}
           </div>
-          <div className="text-[12px] text-[var(--color-muted)] mt-0.5">{s.role}</div>
+          <div className="text-[12px] text-[var(--color-muted)] mt-0.5 leading-tight">{s.role}</div>
         </div>
       </div>
       {!dense && (
