@@ -1,26 +1,34 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import GitHub from "next-auth/providers/github";
 import { SignJWT } from "jose";
 
 /**
- * Auth.js (v5) — Google sign-in, replacing Clerk.
+ * Auth.js (v5) — Google + GitHub sign-in, replacing Clerk.
  *
  * The session carries a short-lived HS256 "broker token" signed with
  * AUTH_BROKER_SECRET (shared with the broker). The client sends it as the
  * Bearer on every /api/* call; the broker validates it in verify_broker_jwt
  * (hosted/broker/auth.py) and maps {sub, email, name} to the user. Admin is
  * still assigned by GSTACK_ADMIN_EMAILS on the broker, so the operator stays
- * admin under their Google account.
+ * admin under whichever provider carries their admin email (Google has it
+ * reliably; GitHub only if the primary email is public/verified).
  *
- * Env: AUTH_SECRET (session encryption), AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET
- * (read automatically by the Google provider), AUTH_BROKER_SECRET (shared).
+ * The jwt/session callbacks are provider-agnostic: Auth.js pre-populates
+ * token.sub with the provider's user id (Google sub / GitHub id), and the
+ * email/name reads below fall back to those defaults when a provider's raw
+ * profile omits them.
+ *
+ * Env: AUTH_SECRET (session encryption), AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET,
+ * AUTH_GITHUB_ID + AUTH_GITHUB_SECRET (each read automatically by its
+ * provider), AUTH_BROKER_SECRET (shared with the broker).
  */
 const BROKER_SECRET = process.env.AUTH_BROKER_SECRET || "";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   session: { strategy: "jwt" },
-  providers: [Google],
+  providers: [Google, GitHub],
   callbacks: {
     async jwt({ token, profile }) {
       if (profile) {
