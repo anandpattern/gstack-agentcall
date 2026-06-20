@@ -9,6 +9,7 @@
 import * as Stub from "./auth-stub";
 import { isDevAuth as _isDevAuth } from "./auth-mode";
 import { SessionProvider, useSession, signIn, signOut } from "next-auth/react";
+import { UserMenu } from "@/components/UserMenu";
 
 const DEV = _isDevAuth();
 
@@ -45,30 +46,21 @@ function RealSignInButton({ children }: { mode?: string; children: React.ReactNo
 }
 export const SignInButton = DEV ? Stub.StubSignInButton : RealSignInButton;
 
-function RealUserButton() {
+function RealUserButton({ menuPosition }: { menuPosition?: string }) {
   const { data } = useSession();
   const u = data?.user;
-  const label = u?.name || u?.email || "Account";
-  const initial = (label.trim()[0] || "?").toUpperCase();
-  const avatar = u?.image ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={u.image} alt="" width={28} height={28} className="w-7 h-7 object-cover" />
-  ) : (
-    initial
-  );
   return (
-    <button
-      type="button"
-      onClick={() => signOut({ callbackUrl: "/" })}
-      title={`${label} — click to sign out`}
-      aria-label="Sign out"
-      className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-[var(--color-panel-2)] text-[var(--color-fg-soft)] flex items-center justify-center text-[12px] font-semibold hover:ring-2 hover:ring-[var(--color-accent-ring)] transition"
-    >
-      {avatar}
-    </button>
+    <UserMenu
+      name={u?.name}
+      email={u?.email}
+      image={u?.image}
+      menuPosition={menuPosition}
+      onSignOut={() => signOut({ callbackUrl: "/" })}
+    />
   );
 }
-export const UserButton = DEV ? Stub.StubUserButton : RealUserButton;
+export const UserButton: (props: { menuPosition?: string }) => React.ReactNode =
+  DEV ? Stub.StubUserButton : RealUserButton;
 
 export const useAuth: () => { getToken: () => Promise<string | null> } = DEV
   ? Stub.useStubAuth

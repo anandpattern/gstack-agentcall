@@ -157,7 +157,7 @@ function UserPill() {
       </a>
       <div className="m-3 p-3 surface text-[12px]">
         <div className="flex items-center gap-2">
-          <UserButton />
+          <UserButton menuPosition="left-0 bottom-full mb-2" />
           <div className="flex-1 min-w-0">
             <div className="truncate font-medium">{displayName}</div>
             {u?.email && <div className="text-[10px] text-[var(--color-muted)] truncate">{u.email}</div>}

@@ -2,8 +2,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@/lib/auth";
-import { useApi } from "@/lib/api";
+import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
+import type { Worker, WorkerKey } from "@/lib/types";
 
 /**
  * Bring Your Own Brain — visitor signs in, mints a brain key, runs the
@@ -38,7 +39,10 @@ export default function ByobPage() {
         </div>
       </SignedOut>
 
-      <SignedIn><Creator /></SignedIn>
+      <SignedIn>
+        <Creator />
+        <YourBrains />
+      </SignedIn>
     </div>
   );
 }
@@ -178,6 +182,80 @@ GSTACK_BROKER_URL=wss://gstack-broker.fly.dev/v1/workers/connect \\
           <Link href="/" className="btn btn-outline text-[12px]">Dashboard</Link>
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * Lets a member see and control the brains they've created — live/offline
+ * status (polled) and a Stop button that revokes the key and disconnects the
+ * brain. Renders nothing until they've made at least one (the Creator above
+ * covers the empty state).
+ */
+function YourBrains() {
+  const call = useApi();
+  const toast = useToast();
+  const { data: keysResp, isLoading, mutate: refreshKeys } =
+    useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
+  const { data: workersResp, mutate: refreshWorkers } =
+    useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 10000 });
+
+  const keys = keysResp?.keys ?? [];
+  const workers = workersResp?.workers ?? [];
+
+  async function stop(prefix: string, label: string) {
+    if (!confirm(`Stop "${label}"? The brain on that machine is disconnected and can't reconnect with this key.`)) return;
+    try {
+      await call("/api/worker-keys/revoke", {
+        method: "POST",
+        body: JSON.stringify({ key_hash: prefix.replace("…", "") }),
+      });
+      toast.push({ kind: "ok", title: "Brain stopped", body: `"${label}" disconnected` });
+      refreshKeys(); refreshWorkers();
+    } catch (e) {
+      toast.push({ kind: "err", title: "Couldn't stop brain", body: (e as Error).message });
+    }
+  }
+
+  if (isLoading && !keysResp) return null;
+  if (keys.length === 0) return null;
+
+  const active = keys.filter((k) => !k.revoked).length;
+  return (
+    <section className="mt-10">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-[15px] font-semibold">Your brains</h2>
+        <span className="text-[12px] text-[var(--color-muted)]">{active} active</span>
+      </div>
+      <div className="space-y-2">
+        {keys.map((k) => {
+          const online = !k.revoked && workers.some((w) => w.name === k.label);
+          return (
+            <div key={k.key_hash_prefix} className="card flex items-center gap-3">
+              <span className={`dot shrink-0 ${k.revoked ? "dot-bad" : online ? "dot-ok pulse" : "dot-mute"}`} />
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[13.5px] truncate">{k.label}</div>
+                <div className="text-[11px] text-[var(--color-muted)]">
+                  {k.revoked ? "revoked" : online ? "live — connected" : "offline — not running"}
+                </div>
+              </div>
+              {k.revoked ? (
+                <span className="badge badge-bad shrink-0">revoked</span>
+              ) : (
+                <button
+                  className="btn btn-danger text-[11px] py-1.5 px-2.5 shrink-0"
+                  onClick={() => stop(k.key_hash_prefix, k.label)}
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-[var(--color-muted)] mt-2 leading-snug">
+        “Stop” revokes the key and disconnects the brain. To pause it without revoking, just quit the agent session in your laptop’s terminal.
+      </p>
     </section>
   );
 }

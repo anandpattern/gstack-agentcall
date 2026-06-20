@@ -19,7 +19,7 @@ export function StubSignInButton({ children }: { mode?: string; children: React.
   return <>{children}</>;
 }
 
-export function StubUserButton() {
+export function StubUserButton(_: { menuPosition?: string }) {
   return <span className="muted text-xs">dev-user</span>;
 }
 
