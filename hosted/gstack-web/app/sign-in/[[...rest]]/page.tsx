@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { isDevAuth } from "@/lib/auth-mode";
 import { AgentcallWordmark } from "@/components/AgentcallWordmark";
@@ -31,7 +32,68 @@ function ProviderSignIn({ label }: { label: string }) {
           <GitHubGlyph /> Continue with GitHub
         </button>
       </div>
+
+      <div className="flex items-center gap-3 my-5">
+        <div className="h-px flex-1 bg-[var(--color-border)]" />
+        <span className="text-[11px] text-[var(--color-muted)]">or</span>
+        <div className="h-px flex-1 bg-[var(--color-border)]" />
+      </div>
+
+      <MagicLinkForm />
     </div>
+  );
+}
+
+function MagicLinkForm() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [msg, setMsg] = useState("");
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setState("sending"); setMsg("");
+    try {
+      const r = await fetch("/api/magic/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { setState("error"); setMsg(data?.error || "Couldn't send the link."); return; }
+      setState("sent");
+    } catch {
+      setState("error"); setMsg("Network error — try again.");
+    }
+  }
+
+  if (state === "sent") {
+    return (
+      <div className="text-center anim-fade">
+        <div className="text-[13.5px] font-medium mb-1">Check your email</div>
+        <p className="text-[12px] text-[var(--color-fg-soft)]">
+          We sent a sign-in link to <span className="text-[var(--color-fg)]">{email}</span>. It expires in 15 minutes.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={send} className="space-y-2.5 text-left">
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@company.com"
+        className="w-full"
+        autoComplete="email"
+      />
+      <button type="submit" disabled={state === "sending"} className="btn btn-outline w-full">
+        {state === "sending" ? "Sending…" : "Email me a magic link"}
+      </button>
+      {state === "error" && <p className="text-[11.5px] text-[#f87171] text-center">{msg}</p>}
+    </form>
   );
 }
 
