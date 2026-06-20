@@ -198,7 +198,7 @@ function YourBrains() {
   const { data: keysResp, isLoading, mutate: refreshKeys } =
     useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
   const { data: workersResp, mutate: refreshWorkers } =
-    useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 10000 });
+    useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 5000 });
 
   const keys = keysResp?.keys ?? [];
   const workers = workersResp?.workers ?? [];

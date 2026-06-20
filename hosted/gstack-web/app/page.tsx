@@ -63,7 +63,7 @@ function MemberDashboard() {
  * 10s so the dot flips as the brain connects/disconnects. */
 function MyBrainStatus() {
   const { data: keysResp } = useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
-  const { data: workersResp } = useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 10000 });
+  const { data: workersResp } = useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 5000 });
   const keys = (keysResp?.keys ?? []).filter((k) => !k.revoked);
   if (keys.length === 0) return null;
   const workers = workersResp?.workers ?? [];

@@ -630,10 +630,13 @@ async def main_async(args: argparse.Namespace) -> None:
             return
         except Exception as e:
             emit({"type": "error", "message": f"session: {e}"})
-        wait = min(backoff, 30.0)
+        # Cap the reconnect delay low so the brain comes back fast after a
+        # broker restart/blip — staying continuously connected matters more
+        # than backing off politely. Worst-case ~10s instead of 30s.
+        wait = min(backoff, 10.0)
         emit({"type": "reconnecting", "in_seconds": wait})
         await asyncio.sleep(wait)
-        backoff = min(backoff * 2, 30.0)
+        backoff = min(backoff * 2, 10.0)
 
 
 def main() -> None:
