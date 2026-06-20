@@ -11,6 +11,9 @@ export type User = {
 export type Worker = {
   id: string;
   owner_user_id?: string;
+  /** 12-char prefix of the key this worker connected with; matches
+   *  WorkerKey.key_hash_prefix so the UI can show which key is online. */
+  key_prefix?: string;
   name: string;
   platform: string;
   state: "idle" | "busy";

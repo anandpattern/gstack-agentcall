@@ -67,7 +67,7 @@ function MyBrainStatus() {
   const keys = (keysResp?.keys ?? []).filter((k) => !k.revoked);
   if (keys.length === 0) return null;
   const workers = workersResp?.workers ?? [];
-  const online = keys.filter((k) => workers.some((w) => w.name === k.label));
+  const online = keys.filter((k) => workers.some((w) => w.key_prefix === k.key_hash_prefix));
   const live = online.length > 0;
   return (
     <Link href="/byob" className="card flex items-center gap-3 mb-6 hover:bg-[var(--color-panel-2)] transition">

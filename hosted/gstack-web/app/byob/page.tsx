@@ -229,7 +229,7 @@ function YourBrains() {
       </div>
       <div className="space-y-2">
         {keys.map((k) => {
-          const online = !k.revoked && workers.some((w) => w.name === k.label);
+          const online = !k.revoked && workers.some((w) => w.key_prefix === k.key_hash_prefix);
           return (
             <div key={k.key_hash_prefix} className="card flex items-center gap-3">
               <span className={`dot shrink-0 ${k.revoked ? "dot-bad" : online ? "dot-ok pulse" : "dot-mute"}`} />

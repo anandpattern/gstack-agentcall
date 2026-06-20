@@ -131,6 +131,11 @@ class Worker:
         return {
             "id":                  self.id,
             "owner_user_id":       self.owner_user_id,
+            # The 12-char prefix of the key this worker authenticated with —
+            # matches worker_keys' key_hash_prefix so the dashboard can tell
+            # exactly which key is online (the worker's self-reported `name` is
+            # the machine hostname, which never equals the user's chosen label).
+            "key_prefix":          self.key_hash[:12] + "…",
             "name":                self.name,
             "platform":            self.platform,
             "state":               self.state,

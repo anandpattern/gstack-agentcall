@@ -59,7 +59,7 @@ function WorkersContent() {
         ) : (
           <div className="space-y-2">
             {keys.map((k) => {
-              const isOnline = workers.some((w) => w.name === k.label);
+              const isOnline = workers.some((w) => w.key_prefix === k.key_hash_prefix);
               return (
                 <div key={k.key_hash_prefix} className="card flex items-center gap-3">
                   <span className={`dot ${k.revoked ? "dot-bad" : isOnline ? "dot-ok" : "dot-mute"}`} />
