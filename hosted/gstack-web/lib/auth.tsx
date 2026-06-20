@@ -8,7 +8,8 @@
 "use client";
 import * as Stub from "./auth-stub";
 import { isDevAuth as _isDevAuth } from "./auth-mode";
-import { SessionProvider, useSession, signIn, signOut } from "next-auth/react";
+import { SessionProvider, useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { UserMenu } from "@/components/UserMenu";
 
 const DEV = _isDevAuth();
@@ -36,10 +37,13 @@ export const SignedIn = DEV ? Stub.StubSignedIn : RealSignedIn;
 export const SignedOut = DEV ? Stub.StubSignedOut : RealSignedOut;
 
 function RealSignInButton({ children }: { mode?: string; children: React.ReactNode }) {
-  // Google redirect sign-in. `mode` (Clerk's modal) is ignored — Google has no
-  // modal flow. display:contents so the wrapper doesn't alter the child layout.
+  // Route to the /sign-in PAGE (which lists every provider — Google, GitHub,
+  // and email magic-link) instead of calling signIn("google") directly, which
+  // jumped straight to Google and hid the other options. `mode` (Clerk's
+  // modal) is ignored. display:contents so the wrapper doesn't alter layout.
+  const router = useRouter();
   return (
-    <span style={{ display: "contents" }} onClick={() => signIn("google")}>
+    <span style={{ display: "contents" }} onClick={() => router.push("/sign-in")}>
       {children}
     </span>
   );
