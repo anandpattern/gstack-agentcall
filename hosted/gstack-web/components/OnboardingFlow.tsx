@@ -52,9 +52,10 @@ export function OnboardingFlow({ onMinted }: { onMinted: () => void }) {
   }
 
   const install = key
-    ? `curl -fsSL https://raw.githubusercontent.com/pattern-ai-labs/gstack-joins-meeting/main/install | bash && \\
-echo '{"worker_key":"${key}"}' > ~/.gstack/worker.json && chmod 600 ~/.gstack/worker.json && \\
-python3 ~/gstack-joins-meeting/worker.py`
+    ? `git clone https://github.com/pattern-ai-labs/gstack-joins-meeting ~/gstack-joins-meeting 2>/dev/null || git -C ~/gstack-joins-meeting pull --ff-only
+python3 -m pip install -q aiohttp websockets
+mkdir -p ~/.gstack && echo '{"worker_key":"${key}"}' > ~/.gstack/worker.json && chmod 600 ~/.gstack/worker.json
+GSTACK_BROKER_URL=wss://gstack-broker.fly.dev/v1/workers/connect python3 ~/gstack-joins-meeting/hosted/worker.py`
     : null;
 
   return (
@@ -93,7 +94,10 @@ python3 ~/gstack-joins-meeting/worker.py`
             <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">2</span>
             <div className="flex-1">
               <div className="font-semibold text-[14px]">Run this on your laptop</div>
-              <div className="text-[12px] text-[var(--color-muted)]">Installs gstack, saves the key, starts the brain.</div>
+              <div className="text-[12px] text-[var(--color-muted)]">
+                Clones our <a className="underline" href="https://github.com/pattern-ai-labs/gstack-joins-meeting/blob/main/hosted/worker.py" target="_blank" rel="noopener">open-source worker</a> (read it first if you like),
+                installs its Python deps, starts the brain. No <span className="mono">curl | bash</span>, runs entirely on your machine.
+              </div>
             </div>
             <button className="btn btn-primary text-[12px] shrink-0" onClick={() => copy(install!, "Command")}>Copy</button>
           </div>

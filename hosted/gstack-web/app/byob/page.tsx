@@ -107,12 +107,10 @@ function Creator() {
   }
 
   const install = key
-    ? `curl -fsSL https://raw.githubusercontent.com/pattern-ai-labs/gstack-joins-meeting/main/install | bash && \\
-mkdir -p ~/.gstack && \\
-echo '{"worker_key":"${key}"}' > ~/.gstack/worker.json && \\
-chmod 600 ~/.gstack/worker.json && \\
-GSTACK_BROKER_URL=wss://gstack-broker.fly.dev/v1/workers/connect \\
-  python3 ~/gstack-joins-meeting/hosted/worker.py`
+    ? `git clone https://github.com/pattern-ai-labs/gstack-joins-meeting ~/gstack-joins-meeting 2>/dev/null || git -C ~/gstack-joins-meeting pull --ff-only
+python3 -m pip install -q aiohttp websockets
+mkdir -p ~/.gstack && echo '{"worker_key":"${key}"}' > ~/.gstack/worker.json && chmod 600 ~/.gstack/worker.json
+GSTACK_BROKER_URL=wss://gstack-broker.fly.dev/v1/workers/connect python3 ~/gstack-joins-meeting/hosted/worker.py`
     : null;
 
   return (
@@ -154,7 +152,10 @@ GSTACK_BROKER_URL=wss://gstack-broker.fly.dev/v1/workers/connect \\
             <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold">2</span>
             <div className="flex-1">
               <div className="font-semibold text-[15px]">Run this on your laptop</div>
-              <div className="text-[12px] text-[var(--color-muted)]">Installs gstack, saves the key, starts the brain pointed at our broker.</div>
+              <div className="text-[12px] text-[var(--color-muted)]">
+                Clones our <a className="underline" href="https://github.com/pattern-ai-labs/gstack-joins-meeting/blob/main/hosted/worker.py" target="_blank" rel="noopener">open-source worker</a>, installs its deps (<span className="mono">aiohttp, websockets</span>), and starts the brain pointed at our broker.
+                No <span className="mono">curl | bash</span> — read every line first if you like. Runs entirely on your machine; the key only lets it join meetings you dispatch and is revocable here anytime.
+              </div>
             </div>
             <button className="btn btn-primary text-[12px]" onClick={() => copy(install, "Command")}>Copy</button>
           </div>
