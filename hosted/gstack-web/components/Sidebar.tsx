@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth";
 import { useApiSWR } from "@/lib/api";
+import { useSticky } from "@/lib/useSticky";
 import type { User } from "@/lib/types";
 import { AgentcallWordmark } from "@/components/AgentcallWordmark";
 
@@ -111,7 +112,7 @@ function BrokerStatus() {
   // "Live" only when a brain is connected AND idle — i.e. a dispatch can
   // actually be served right now. Broker-up-but-no-free-brain shows muted so
   // users don't dispatch into a dead pool and get stuck.
-  const live = up && brains > 0;
+  const live = useSticky(up && brains > 0);
   const dot = checking ? "dot-mute" : !up ? "dot-bad" : live ? "dot-ok pulse" : "dot-mute";
   const label = checking ? "checking…"
     : !up ? "demo offline"

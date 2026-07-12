@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@/lib/auth";
 import { useApiSWR } from "@/lib/api";
+import { useSticky } from "@/lib/useSticky";
 import type { User } from "@/lib/types";
 import { AgentcallWordmark } from "@/components/AgentcallWordmark";
 
@@ -123,7 +124,7 @@ function MobileStatus() {
   const { data, error } = useApiSWR<{ ok: boolean; brains?: number; brains_total?: number }>(
     "/healthz", { refreshInterval: 10000, allowSignedOut: true });
   const up = !error && data?.ok === true;
-  const live = up && (data?.brains ?? 0) > 0;       // a brain is connected + idle
+  const live = useSticky(up && (data?.brains ?? 0) > 0);  // sticky so it doesn't flap on a missed poll
   const busy = up && !live && (data?.brains_total ?? 0) > 0;
   return (
     <span
