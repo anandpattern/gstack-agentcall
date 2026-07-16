@@ -2,16 +2,18 @@
 """
 gstack × AgentCall — specialist runner (v2, boardroom-inspired).
 
-Thin Python supervisor around one bash-spawned AgentCall bridge. Instead of
-managing a FIFO pipe to bridge stdin, this version appends JSON commands to
-a per-specialist `.cmds` file that the launch.sh script tails via process
-substitution (`bridge.py < <(tail -n 0 -f <id>.cmds)`). That matches the
-boardroom architecture and eliminates our earlier pipe deadlocks.
+Thin Python supervisor around one AgentCall bridge. It appends JSON
+commands to a per-specialist `.cmds` file which is streamed to the
+bridge's stdin — on POSIX by the launch.sh scripts' process substitution
+(`bridge.py < <(tail -n 0 -f <id>.cmds)`, exactly as before), and on
+Windows by an in-process pump thread (Git Bash can't run that process
+substitution — it hangs — so the bridge is spawned natively there).
 
 Responsibilities
 ----------------
-1. Spawn the bridge via scripts/launch.sh  (audio mode)
-   or scripts/launch-visual.sh  (avatar mode with shared avatar server).
+1. Spawn the bridge via scripts/launch.sh (audio) or launch-visual.sh
+   (avatar) on POSIX, or directly as a Python subprocess with a stdin
+   pump on Windows.
 2. Tail the bridge's event file (<session_dir>/<id>.jsonl) and:
      • greet on first participant.joined or call.bot_ready
      • (LISTENER only) forward user.message events to the intelligence bus
@@ -39,10 +41,18 @@ import os
 # Subprocess env hardening — we only pass the bridge what it needs, so
 # unrelated dev secrets (AWS, GitHub, etc.) don't leak into vendored code.
 _SAFE_ENV_KEYS = frozenset({
+    # POSIX / cross-platform
     "PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD",
     "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ",
     "PYTHONUNBUFFERED", "PYTHONPATH",
     "AGENTCALL_API_KEY", "AGENTCALL_API_URL",
+    # Windows OS essentials — the interpreter needs these just to start, and
+    # for TLS/socket, temp-dir, and home-dir (~/.agentcall) resolution.
+    # These names don't exist on POSIX, so listing them is harmless there.
+    "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT",
+    "TEMP", "TMP", "APPDATA", "LOCALAPPDATA",
+    "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "USERNAME",
+    "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
 })
 
 
@@ -51,6 +61,7 @@ def _safe_env() -> dict:
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -72,7 +83,13 @@ LAUNCH_VISUAL = SCRIPTS_DIR / "launch-visual.sh"
 import getpass as _getpass
 def _bus_dir() -> Path:
     uid = os.getuid() if hasattr(os, "getuid") else 0
-    p = Path(f"/tmp/gstack-intelligence-{uid}")
+    # POSIX stays on "/tmp" exactly as before — docs, SKILL.md, and
+    # bin/brain-status.sh all reference /tmp, and macOS's per-user $TMPDIR
+    # could otherwise split the bus between the server (full env) and the
+    # runner (whose scrubbed env may lack TMPDIR). Only Windows needs %TEMP%
+    # (gettempdir): there a bare "/tmp" resolves against the current drive.
+    base = Path(tempfile.gettempdir()) if os.name == "nt" else Path("/tmp")
+    p = base / f"gstack-intelligence-{uid}"
     p.mkdir(parents=True, exist_ok=True, mode=0o700)
     try:
         os.chmod(p, 0o700)
@@ -80,10 +97,10 @@ def _bus_dir() -> Path:
         pass
     (p / "outbox").mkdir(parents=True, exist_ok=True, mode=0o700)
     # Back-compat symlink so old paths keep working for THIS user only.
-    legacy = Path("/tmp/gstack-intelligence")
+    legacy = base / "gstack-intelligence"
     try:
         if not legacy.exists():
-            legacy.symlink_to(p)
+            legacy.symlink_to(p, target_is_directory=True)
     except Exception:
         pass
     return p
@@ -165,6 +182,26 @@ def _load_specialist_names() -> set[str]:
 SPECIALIST_DISPLAY_NAMES = _load_specialist_names()
 
 
+# Per-specialist opening questions — the listener (chair) opens the meeting by
+# asking the room something in persona instead of everyone reciting a flat
+# intro into silence. Sourced from data/specialists.json (opening_question).
+def _load_opening_questions() -> dict[str, str]:
+    here = Path(__file__).resolve().parent
+    json_path = here / "data" / "specialists.json"
+    out: dict[str, str] = {}
+    if json_path.is_file():
+        try:
+            for s in json.loads(json_path.read_text()):
+                q = (s.get("opening_question") or "").strip()
+                if s.get("id") and q:
+                    out[s["id"]] = q
+        except Exception:
+            pass
+    return out
+
+OPENING_QUESTIONS = _load_opening_questions()
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Runner
 # ──────────────────────────────────────────────────────────────────────────────
@@ -229,8 +266,9 @@ class Runner:
     def send_cmd(self, cmd: dict) -> None:
         """Append one JSON command line to the bridge's cmds file.
 
-        Bridge is tailing this file via `tail -n 0 -f` inside launch.sh —
-        the append is picked up immediately. Thread-safe because we open
+        The bridge receives appended lines immediately — via launch.sh's
+        `tail -n 0 -f` process substitution on POSIX, or the runner's
+        `_cmds_pump` thread on Windows. Thread-safe because we open
         append-only and each write is one line.
         """
         try:
@@ -288,15 +326,32 @@ class Runner:
 
     # ── greeting ───────────────────────────────────────────────────────────
     def greeting_text(self) -> str:
-        desc = (self.description or "").rstrip()
-        if desc and not desc.endswith((".", "!", "?")):
-            desc += "."
+        """The LISTENER (chair — first specialist in the dispatch) opens the
+        meeting by asking the room its persona question, so the conversation
+        starts immediately instead of N bots reciting intros into silence.
+        Everyone else says just their name — the chair holds the floor."""
+        if not self.is_listener:
+            who = self.display_name if self.display_name.lower() != self.role.lower() \
+                else self.role
+            return f"{who} here."
+
         brief_sentence = ""
         if self.brief:
             b = " ".join(self.brief.split())
             if len(b) > 80:
                 b = b[:80].rstrip() + "…"
-            brief_sentence = f"Briefed on: {b}. "
+            brief_sentence = f"I've read the brief: {b}. "
+
+        opener = OPENING_QUESTIONS.get(self.spec_id, "")
+        if opener:
+            return (
+                f"Hi, I'm the {self.role} from gstack. {brief_sentence}{opener}"
+            ).strip()
+
+        # Fallback (no opening_question in data): the old full intro.
+        desc = (self.description or "").rstrip()
+        if desc and not desc.endswith((".", "!", "?")):
+            desc += "."
         return (
             f"Hi, I'm the {self.role} from gstack. "
             f"{desc} {brief_sentence}Ready when you need me."
@@ -315,8 +370,54 @@ class Runner:
         self._acquire_speech_lock()
         self.send_cmd(self._tts_speak_cmd(text))
 
-    # ── bridge spawn via bash launcher ─────────────────────────────────────
+    # ── bridge spawn (native, cross-platform) ──────────────────────────────
+    def _find_bridge_script(self) -> Path:
+        """Locate the vendored AgentCall bridge for this mode.
+
+        Same search order the old bash launchers used, but resolved in Python
+        so there's no dependency on bash. Honors the BRIDGE_SCRIPT /
+        BRIDGE_VISUAL_SCRIPT env overrides just like the launchers did.
+        """
+        if self.mode == "avatar":
+            fname, override = "bridge-visual.py", os.environ.get("BRIDGE_VISUAL_SCRIPT")
+        else:
+            fname, override = "bridge.py", os.environ.get("BRIDGE_SCRIPT")
+        home = Path.home()
+        candidates = [
+            ROOT / "vendor" / fname,   # our vendored, patched copy (preferred)
+            home / ".claude" / "skills" / "join-meeting" / "scripts" / "python" / fname,
+            home / ".claude" / "skills" / "agentcall" / "scripts" / "python" / fname,
+            home / ".claude" / "plugins" / "marketplaces" / "agentcall" / "scripts" / "python" / fname,
+            home / ".claude" / "plugins" / "cache" / "agentcall" / "join-meeting" / "1.0.0" / "scripts" / "python" / fname,
+        ]
+        if override:
+            candidates.insert(0, Path(override))
+        for p in candidates:
+            if p and p.is_file():
+                return p.resolve()
+        raise RuntimeError(
+            f"{fname} not found — set "
+            f"{'BRIDGE_VISUAL_SCRIPT' if self.mode == 'avatar' else 'BRIDGE_SCRIPT'}"
+        )
+
     def start_bridge(self) -> None:
+        """Spawn the AgentCall bridge.
+
+        POSIX: via the scripts/launch*.sh bash launchers, exactly as always
+        (`bridge.py < <(tail -n 0 -f CMDS) &`).
+
+        Windows: natively — Git Bash cannot run that process substitution
+        (the launcher hangs on exit instead of returning in <1s, so the
+        runner's timeout would kill the bridge before it connects). There
+        the bridge is spawned as a direct child and a pump thread streams
+        the .cmds file to its stdin.
+        """
+        if os.name == "nt":
+            self._start_bridge_windows()
+        else:
+            self._start_bridge_posix()
+
+    def _start_bridge_posix(self) -> None:
         if self.mode == "avatar":
             if not self.avatar_port:
                 raise RuntimeError("--avatar-port required in avatar mode")
@@ -370,6 +471,105 @@ class Runner:
                 pass
         if rc != 0:
             raise RuntimeError(f"launcher exited rc={rc}")
+
+    def _start_bridge_windows(self) -> None:
+        if self.mode == "avatar" and not self.avatar_port:
+            raise RuntimeError("--avatar-port required in avatar mode")
+
+        bridge = self._find_bridge_script()
+
+        cmd = [sys.executable, str(bridge), self.meet_url,
+               "--name", self.display_name,
+               "--voice", self.voice,
+               "--vad-timeout", os.environ.get("VAD_TIMEOUT", "0.8"),
+               "--output", str(self.events_path)]
+        if self.mode == "avatar":
+            cmd += ["--ui-port", str(self.avatar_port)]
+            screenshare_port = os.environ.get("SCREENSHARE_PORT")
+            if screenshare_port:
+                cmd += ["--screenshare-port", screenshare_port]
+
+        # Bridge stdout/stderr → orchestrator.log (same file the launchers
+        # redirected into). Keep the handle on self so it isn't GC-closed
+        # while the bridge is still writing.
+        self._bridge_log_fh = open(self.session_dir / "orchestrator.log",
+                                   "a", encoding="utf-8", errors="replace")
+        # Same env hardening as the launcher path — never hand the vendored
+        # bridge the full shell environment.
+        env = _safe_env()
+        env["PYTHONUNBUFFERED"] = "1"
+
+        self.log(f"spawning bridge natively: {bridge.name} mode={self.mode}")
+        self.bridge_proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=self._bridge_log_fh,
+            stderr=self._bridge_log_fh,
+            cwd=str(ROOT),
+            env=env,
+            text=True,
+            encoding="utf-8",
+            bufsize=1,
+        )
+        # Parity with the launchers: record the bridge pid.
+        try:
+            with open(self.session_dir / "session.pid", "a", encoding="utf-8") as fh:
+                fh.write(f"{self.bridge_proc.pid}\n")
+        except Exception:
+            pass
+
+        # Feed appended .cmds lines to the bridge's stdin — the cross-platform
+        # replacement for `< <(tail -n 0 -f CMDS)`.
+        threading.Thread(target=self._cmds_pump, daemon=True).start()
+
+        # Fail fast (and loudly) if the bridge dies on startup — the failure
+        # class that used to be invisible on Windows.
+        time.sleep(0.6)
+        rc = self.bridge_proc.poll()
+        if rc is not None:
+            tail = ""
+            try:
+                tail = (self.session_dir / "orchestrator.log").read_text(
+                    encoding="utf-8", errors="replace")[-1000:]
+            except Exception:
+                pass
+            raise RuntimeError(f"bridge exited immediately rc={rc}\n{tail}".rstrip())
+        self.log(f"bridge running pid={self.bridge_proc.pid}")
+
+    def _cmds_pump(self) -> None:
+        """Tail the .cmds file and forward new lines to the bridge's stdin.
+
+        Cross-platform stand-in for `bridge < <(tail -n 0 -f CMDS)`. Seeks to
+        end first so pre-existing lines don't re-fire (matches `tail -n 0`),
+        and runs until the bridge process exits (so a `leave` written during
+        shutdown is still delivered).
+        """
+        try:
+            fh = open(self.cmds_path, "r", encoding="utf-8")
+        except Exception as e:
+            self.log(f"cmds pump open failed: {e}")
+            return
+        try:
+            fh.seek(0, os.SEEK_END)
+            proc = self.bridge_proc
+            while proc and proc.poll() is None:
+                line = fh.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                if not line.endswith("\n"):
+                    line += "\n"
+                try:
+                    proc.stdin.write(line)
+                    proc.stdin.flush()
+                except Exception as e:
+                    self.log(f"cmds pump write failed: {e}")
+                    break
+        finally:
+            try:
+                fh.close()
+            except Exception:
+                pass
 
     # ── bridge-event tail ──────────────────────────────────────────────────
     def _events_tail(self) -> None:
@@ -582,6 +782,32 @@ class Runner:
 
     @staticmethod
     def _pid_alive(pid: int) -> bool:
+        if os.name == "nt":
+            # os.kill(pid, 0) on Windows calls TerminateProcess — it would
+            # KILL the process we're only trying to probe. Query the handle.
+            try:
+                pid = int(pid)
+            except Exception:
+                return False
+            if pid <= 0:
+                return False
+            import ctypes
+            from ctypes import wintypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            k = ctypes.windll.kernel32
+            k.OpenProcess.restype = wintypes.HANDLE
+            k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not h:
+                return False
+            try:
+                code = wintypes.DWORD()
+                if not k.GetExitCodeProcess(h, ctypes.byref(code)):
+                    return False
+                return code.value == STILL_ACTIVE
+            finally:
+                k.CloseHandle(h)
         try:
             os.kill(pid, 0)
             return True
@@ -762,6 +988,22 @@ class Runner:
                 time.sleep(2)
         except Exception as e:
             self.log(f"leave append failed: {e}")
+
+        # Windows only: the runner owns the bridge process (native spawn), so
+        # reap it here instead of leaving an orphan that keeps the bot in the
+        # meeting until AgentCall's alone-timeout. On POSIX bridge_proc is the
+        # long-exited launch.sh, and the bridge exits on its own after
+        # processing `leave` — exactly as before.
+        proc = self.bridge_proc
+        if os.name == "nt" and proc and proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────

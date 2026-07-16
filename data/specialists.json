@@ -10,7 +10,8 @@
     "icon": "YC",
     "glyph": "◉",
     "accent": "#ff6b2b",
-    "category": "Strategy"
+    "category": "Strategy",
+    "opening_question": "So — what are you working on, and who actually wants it?"
   },
   {
     "id": "plan-ceo-review",
@@ -23,7 +24,8 @@
     "icon": "♛",
     "glyph": "♛",
     "accent": "#ffb020",
-    "category": "Strategy"
+    "category": "Strategy",
+    "opening_question": "Give me the one-liner. What are we betting on?"
   },
   {
     "id": "plan-eng-review",
@@ -36,7 +38,8 @@
     "icon": "⎇",
     "glyph": "⎇",
     "accent": "#5ee1b5",
-    "category": "Planning"
+    "category": "Planning",
+    "opening_question": "Walk me through the plan — what are we building first?"
   },
   {
     "id": "plan-design-review",
@@ -49,7 +52,8 @@
     "icon": "◈",
     "glyph": "◈",
     "accent": "#d68cff",
-    "category": "Planning"
+    "category": "Planning",
+    "opening_question": "Show me the screen. What are we looking at?"
   },
   {
     "id": "plan-devex-review",
@@ -62,7 +66,8 @@
     "icon": "❮❯",
     "glyph": "❮❯",
     "accent": "#7dd3fc",
-    "category": "Planning"
+    "category": "Planning",
+    "opening_question": "Which developer journey are we smoothing today?"
   },
   {
     "id": "design-consultation",
@@ -75,7 +80,8 @@
     "icon": "✦",
     "glyph": "✦",
     "accent": "#f0abfc",
-    "category": "Design"
+    "category": "Design",
+    "opening_question": "What's the design problem — where does it feel wrong?"
   },
   {
     "id": "design-shotgun",
@@ -88,7 +94,8 @@
     "icon": "⁂",
     "glyph": "⁂",
     "accent": "#fb7185",
-    "category": "Design"
+    "category": "Design",
+    "opening_question": "Give me the vibe. What direction are we exploring?"
   },
   {
     "id": "design-html",
@@ -101,7 +108,8 @@
     "icon": "</>",
     "glyph": "</>",
     "accent": "#a78bfa",
-    "category": "Design"
+    "category": "Design",
+    "opening_question": "Describe the page you want — I'll start sketching."
   },
   {
     "id": "review",
@@ -114,7 +122,8 @@
     "icon": "⌘",
     "glyph": "⌘",
     "accent": "#00e5ff",
-    "category": "Engineering"
+    "category": "Engineering",
+    "opening_question": "What am I reviewing — where's the change?"
   },
   {
     "id": "investigate",
@@ -127,7 +136,8 @@
     "icon": "⌕",
     "glyph": "⌕",
     "accent": "#fde047",
-    "category": "Engineering"
+    "category": "Engineering",
+    "opening_question": "What's broken? Symptom first — when did it start?"
   },
   {
     "id": "design-review",
@@ -140,7 +150,8 @@
     "icon": "◐",
     "glyph": "◐",
     "accent": "#f472b6",
-    "category": "Review"
+    "category": "Review",
+    "opening_question": "Which screen are we critiquing? Put it up."
   },
   {
     "id": "devex-review",
@@ -153,7 +164,8 @@
     "icon": "▤",
     "glyph": "▤",
     "accent": "#60a5fa",
-    "category": "Review"
+    "category": "Review",
+    "opening_question": "What setup am I trying to break — where do I start?"
   },
   {
     "id": "qa",
@@ -166,7 +178,8 @@
     "icon": "✓",
     "glyph": "✓",
     "accent": "#4ade80",
-    "category": "Quality"
+    "category": "Quality",
+    "opening_question": "What just shipped — and what's the riskiest path through it?"
   },
   {
     "id": "cso",
@@ -179,7 +192,8 @@
     "icon": "⛨",
     "glyph": "⛨",
     "accent": "#f87171",
-    "category": "Quality"
+    "category": "Quality",
+    "opening_question": "What's newly exposed — endpoints, keys, or user data?"
   },
   {
     "id": "ship",
@@ -192,7 +206,8 @@
     "icon": "▲",
     "glyph": "▲",
     "accent": "#34d399",
-    "category": "Release"
+    "category": "Release",
+    "opening_question": "What's in this release — and what's blocking the cut?"
   },
   {
     "id": "land-and-deploy",
@@ -205,7 +220,8 @@
     "icon": "⇧",
     "glyph": "⇧",
     "accent": "#22d3ee",
-    "category": "Release"
+    "category": "Release",
+    "opening_question": "What are we landing — and is CI green?"
   },
   {
     "id": "canary",
@@ -218,7 +234,8 @@
     "icon": "☀",
     "glyph": "☀",
     "accent": "#fbbf24",
-    "category": "Release"
+    "category": "Release",
+    "opening_question": "What did we just deploy, and which metric says it's healthy?"
   },
   {
     "id": "retro",
@@ -231,7 +248,8 @@
     "icon": "↻",
     "glyph": "↻",
     "accent": "#c4b5fd",
-    "category": "Ops"
+    "category": "Ops",
+    "opening_question": "Let's start simple — what went well this week?"
   },
   {
     "id": "spec",
@@ -244,6 +262,7 @@
     "icon": "§",
     "glyph": "§",
     "accent": "#a3e635",
-    "category": "Planning"
+    "category": "Planning",
+    "opening_question": "Before anything else — why does this need to exist?"
   }
 ]
