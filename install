@@ -4,10 +4,11 @@
 # Usage — one-line install (clones + registers skill):
 #   curl -fsSL https://raw.githubusercontent.com/pattern-ai-labs/gstack-joins-meeting/main/install | bash
 #
-# Or, if you've already cloned the repo:
+# Or, if you've already cloned the repo (anywhere — a ZIP extract works too):
 #   ./install
 #
 # Idempotent — re-run any time (e.g. after `git pull`).
+# Works on macOS, Linux, and Windows (Git Bash).
 
 set -euo pipefail
 
@@ -16,15 +17,39 @@ SKILL_NAME="gstack-joins-meeting"
 SKILLS_DIR="${HOME}/.claude/skills"
 TARGET="${SKILLS_DIR}/${SKILL_NAME}"
 
+# 0. Find a Python 3.10+ interpreter. POSIX ships `python3`; Windows
+#    installs often expose only `python` or the `py` launcher.
+PY=""
+for c in python3 python py; do
+  command -v "$c" >/dev/null 2>&1 || continue
+  if "$c" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+    PY="$c"
+    break
+  fi
+done
+if [[ -z "$PY" ]]; then
+  echo "FATAL: Python 3.10+ not found on PATH (tried: python3, python, py)" >&2
+  exit 2
+fi
+echo "  · python: ${PY} ($("$PY" -c 'import platform; print(platform.python_version())'))"
+
 # 1. Locate (or clone) the repo.
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "$(dirname "${BASH_SOURCE[0]}")/SKILL.md" ]]; then
   HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 else
-  # Piped from curl — clone into ~/gstack-joins-meeting.
+  # Piped from curl — prefer an existing checkout wherever it lives.
   HERE="${HOME}/${SKILL_NAME}"
-  if [[ -d "${HERE}/.git" ]]; then
+  if [[ -d "${TARGET}/.git" && ! -L "${TARGET}" ]]; then
+    # Manual install: repo cloned straight into the skills dir. Canonical.
+    HERE="${TARGET}"
+    echo "  · using existing checkout at ${HERE} — pulling latest"
+    git -C "${HERE}" pull --ff-only
+  elif [[ -d "${HERE}/.git" ]]; then
     echo "  · ${HERE} exists — pulling latest"
     git -C "${HERE}" pull --ff-only
+  elif [[ -e "${HERE}" ]]; then
+    echo "FATAL: ${HERE} exists but is not a git checkout — move it aside and re-run" >&2
+    exit 1
   else
     echo "  · cloning ${REPO_URL} → ${HERE}"
     git clone --depth 1 "${REPO_URL}" "${HERE}"
@@ -37,18 +62,29 @@ if [[ ! -f "${HERE}/SKILL.md" || ! -f "${HERE}/server.py" ]]; then
   exit 1
 fi
 
-# 3. Symlink into Claude Code skills dir.
-mkdir -p "${SKILLS_DIR}"
-[[ -L "${TARGET}" || -e "${TARGET}" ]] && rm -rf "${TARGET}"
-ln -s "${HERE}" "${TARGET}"
-echo "  ✓ skill registered → ${TARGET}"
-
-# 4. Python check.
-if ! ( cd "${HERE}" && python3 -c "import server, specialist_runner" ) 2>/dev/null; then
-  echo "  ! python3 import failed — need Python 3.10+ on PATH" >&2
+# 3. Python import check — before registering, so a failure can't leave a
+#    half-registered skill behind.
+if ! ( cd "${HERE}" && "$PY" -c "import server, specialist_runner" ) 2>/dev/null; then
+  echo "FATAL: ${PY} failed to import server.py / specialist_runner.py" >&2
   exit 2
 fi
 echo "  ✓ python OK"
+
+# 4. Bridge runtime deps (the vendored AgentCall bridges import these at
+#    dispatch time; the skill itself is stdlib-only).
+if "$PY" -c "import aiohttp, websockets" >/dev/null 2>&1; then
+  echo "  ✓ bridge deps present"
+else
+  echo "  · installing bridge deps: aiohttp, websockets"
+  "$PY" -m pip install --quiet aiohttp websockets >/dev/null 2>&1 \
+    || "$PY" -m pip install --quiet --user aiohttp websockets >/dev/null 2>&1 \
+    || true
+  if "$PY" -c "import aiohttp, websockets" >/dev/null 2>&1; then
+    echo "  ✓ bridge deps installed"
+  else
+    echo "  ⚠ could not install deps — run: ${PY} -m pip install aiohttp websockets" >&2
+  fi
+fi
 
 # 5. Vendored bridges.
 for f in vendor/bridge.py vendor/bridge-visual.py; do
@@ -56,7 +92,37 @@ for f in vendor/bridge.py vendor/bridge-visual.py; do
 done
 echo "  ✓ bridges in place"
 
-# 6. AgentCall key — warn but don't block.
+# 6. Register into the Claude Code skills dir.
+mkdir -p "${SKILLS_DIR}"
+if [[ "${HERE}" == "${TARGET}" ]]; then
+  echo "  ✓ skill already lives at ${TARGET}"
+else
+  [[ -L "${TARGET}" || -e "${TARGET}" ]] && rm -rf "${TARGET}"
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      # Git Bash `ln -s` silently deep-copies (core.symlinks=false), which
+      # freezes the skill at install time — a later `git pull` in the clone
+      # would never reach it. An NTFS directory junction is a real link and
+      # needs no admin rights.
+      if MSYS_NO_PATHCONV=1 cmd /c mklink /J "$(cygpath -w "${TARGET}")" "$(cygpath -w "${HERE}")" >/dev/null 2>&1; then
+        echo "  ✓ skill registered (junction) → ${TARGET}"
+      else
+        cp -r "${HERE}" "${TARGET}"
+        echo "  ⚠ junction failed — copied instead; re-run this installer after every 'git pull'" >&2
+      fi
+      ;;
+    *)
+      ln -s "${HERE}" "${TARGET}"
+      echo "  ✓ skill registered → ${TARGET}"
+      ;;
+  esac
+fi
+if [[ ! -f "${TARGET}/SKILL.md" ]]; then
+  echo "FATAL: registration failed — ${TARGET}/SKILL.md not reachable" >&2
+  exit 3
+fi
+
+# 7. AgentCall key — warn but don't block.
 if [[ ! -f "${HOME}/.agentcall/config.json" && -z "${AGENTCALL_API_KEY:-}" ]]; then
   cat <<EOF
 
@@ -74,6 +140,6 @@ cat <<EOF
       "Bring the CEO into https://meet.google.com/<your-meet>"
 
   Or open the dashboard manually:
-      python3 ${HERE}/server.py   →   http://localhost:8765
+      ${PY} ${HERE}/server.py   →   http://localhost:8765
 
 EOF
