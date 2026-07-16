@@ -117,8 +117,8 @@ function BrokerStatus() {
   const label = checking ? "checking…"
     : !up ? "demo offline"
     : live ? "demo live"
-    : total > 0 ? "brains busy"
-    : "no brain";
+    : total > 0 ? "pool busy"
+    : "pool offline";
 
   return (
     <div className="px-5 pb-3 pt-1 flex items-center gap-2 text-[10.5px] mono text-[var(--color-muted)]">
@@ -162,6 +162,13 @@ function UserPill() {
           <div className="flex-1 min-w-0">
             <div className="truncate font-medium">{displayName}</div>
             {u?.email && <div className="text-[10px] text-[var(--color-muted)] truncate">{u.email}</div>}
+            {/* Quota where the user can actually see it — before this, the
+                first contact with quota was a failed dispatch. */}
+            {u && (
+              <div className="text-[10px] text-[var(--color-muted)] mono mt-0.5">
+                {u.minutes_used}/{u.quota_minutes} min used
+              </div>
+            )}
           </div>
           {u?.role === "admin" && <span className="badge badge-accent">admin</span>}
         </div>

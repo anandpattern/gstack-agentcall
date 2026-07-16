@@ -30,20 +30,28 @@ export function MemberActiveCalls() {
   // Latest ended call that produced notes — the post-call artifact.
   const lastWithNotes = all.find((a) => a.status === "ended" && a.summary);
   const [dismissedNotes, setDismissedNotes] = useState<string | null>(null);
+  // After End call, the bots take a few seconds to actually exit the Meet.
+  // Vanishing the card instantly reads as "did that even work?" — so hold a
+  // transitional "leaving…" surface for ~12s (the SWR 4s poll re-renders us,
+  // which is what eventually expires it).
+  const [leaving, setLeaving] = useState<{ id: string; until: number } | null>(null);
+  const leavingVisible =
+    !!leaving && Date.now() < leaving.until && !active.some((a) => a.id === leaving.id);
 
-  if (active.length === 0 && queued.length === 0 &&
+  if (active.length === 0 && queued.length === 0 && !leavingVisible &&
       (!lastWithNotes || dismissedNotes === lastWithNotes.id)) return null;
 
-  async function recall(worker_id?: string) {
+  async function recall(a: Assignment) {
     try {
       const r = await call<{ recalled: number }>("/api/recall", {
         method: "POST",
-        body: JSON.stringify(worker_id ? { worker_id } : {}),
+        body: JSON.stringify(a.worker_id ? { worker_id: a.worker_id } : {}),
       });
+      setLeaving({ id: a.id, until: Date.now() + 12000 });
       toast.push({
         kind: "ok",
         title: "Call ended",
-        body: `${r.recalled} brain${r.recalled === 1 ? "" : "s"} freed — notes incoming`,
+        body: `${r.recalled} brain${r.recalled === 1 ? "" : "s"} freed`,
       });
       mutate();
     } catch (e) {
@@ -64,7 +72,8 @@ export function MemberActiveCalls() {
   return (
     <div className="mb-6 space-y-3 anim-up">
       {queued.map((a) => <QueuedCard key={a.id} a={a} onCancel={() => cancel(a.id)} />)}
-      {active.map((a) => <CallCard key={a.id} a={a} onEnd={() => recall(a.worker_id)} />)}
+      {active.map((a) => <CallCard key={a.id} a={a} onEnd={() => recall(a)} />)}
+      {leavingVisible && <LeavingCard />}
       {lastWithNotes && dismissedNotes !== lastWithNotes.id &&
         active.length === 0 && queued.length === 0 && (
         <NotesCard a={lastWithNotes} onDismiss={() => setDismissedNotes(lastWithNotes.id)} />
@@ -197,6 +206,22 @@ function CallCard({ a, onEnd }: { a: Assignment; onEnd: () => void }) {
       )}
 
       <Transcript aid={a.id} specialists={a.specialists} />
+    </div>
+  );
+}
+
+/* Transitional surface shown right after End call: the recall reached the
+ * brain, but the bot tiles take a few seconds to drop out of the Meet. */
+function LeavingCard() {
+  return (
+    <div className="surface p-4 flex items-center gap-3 anim-fade">
+      <span className="dot dot-warn pulse shrink-0" />
+      <div className="text-[13px]">
+        <span className="font-medium">Specialists are leaving the meeting…</span>
+        <span className="text-[var(--color-muted)] ml-1.5 text-[12px]">
+          their tiles drop out of the Meet in a few seconds.
+        </span>
+      </div>
     </div>
   );
 }

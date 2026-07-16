@@ -129,7 +129,7 @@ function MobileStatus() {
   return (
     <span
       className={`dot ${live ? "dot-ok pulse" : up ? "dot-mute" : error ? "dot-bad" : "dot-mute"}`}
-      title={live ? "Demo live — brain ready" : up ? (busy ? "Brains busy" : "No brain online") : "Demo offline"}
+      title={live ? "Demo live — a brain is ready" : up ? (busy ? "Pool busy — dispatches will queue" : "Pool offline") : "Demo offline"}
     />
   );
 }

@@ -25,6 +25,13 @@ export function DispatchPanel() {
   const { data: specsResp } = useApiSWR<{ specialists: Specialist[] }>("/api/specialists");
   const { mutate: refreshWorkers }     = useApiSWR<unknown>("/api/workers");
   const { mutate: refreshAssignments } = useApiSWR<unknown>("/api/assignments");
+  // Pool availability, surfaced at the point of action: when no brain is
+  // free the Dispatch button says "Join queue →" so nobody dispatches into
+  // the void and then wonders what happened. brains = connected idle brains.
+  const { data: hz } = useApiSWR<{ ok: boolean; brains?: number }>(
+    "/healthz", { refreshInterval: 10000, allowSignedOut: true });
+  const poolFree = (hz?.brains ?? 0) > 0;
+  const poolKnown = hz !== undefined;
 
   const all = specsResp?.specialists ?? STATIC_SPECIALISTS;
 
@@ -237,6 +244,12 @@ export function DispatchPanel() {
             {meetUrl.trim() ? (meetLooksValid ? "valid" : "bad host") : "empty"}
           </span>
         </div>
+        {poolKnown && !poolFree && (
+          <div className="mt-2 text-[11.5px] text-[var(--color-muted)] flex items-center gap-1.5">
+            <span className="dot dot-mute shrink-0" />
+            No brain is free right now — dispatches wait in line and fire automatically when one opens up.
+          </div>
+        )}
         {newMeetHelper && (
           <div className="mt-2 surface bg-[var(--color-bg-soft)] p-3 text-[12px] anim-fade flex items-center gap-3">
             <span className="dot dot-warn pulse shrink-0" />
@@ -357,9 +370,13 @@ export function DispatchPanel() {
             className="btn btn-primary px-5 sm:px-6 py-2.5 text-[14px] rounded-full whitespace-nowrap"
             disabled={pending || !meetUrl.trim()}
             onClick={dispatch}
-            title={!meetUrl.trim() ? "Paste a meeting URL above first" : undefined}
+            title={!meetUrl.trim()
+              ? "Paste a meeting URL above first"
+              : poolKnown && !poolFree
+                ? "No brain is free right now — you'll wait in line and it fires automatically"
+                : undefined}
           >
-            {pending ? "Dispatching…" : `Dispatch →`}
+            {pending ? "Dispatching…" : poolKnown && !poolFree ? "Join queue →" : "Dispatch →"}
           </button>
         </div>
       </div>

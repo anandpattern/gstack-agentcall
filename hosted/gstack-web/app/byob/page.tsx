@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton } from "@/lib/auth";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
+import { brainInstallCommand } from "@/lib/brain-install";
 import type { Worker, WorkerKey } from "@/lib/types";
 
 /**
@@ -106,12 +107,7 @@ function Creator() {
     }
   }
 
-  const install = key
-    ? `git clone https://github.com/pattern-ai-labs/gstack-joins-meeting ~/gstack-joins-meeting 2>/dev/null || git -C ~/gstack-joins-meeting pull --ff-only
-python3 -m pip install -q aiohttp websockets
-mkdir -p ~/.gstack && echo '{"worker_key":"${key}"}' > ~/.gstack/worker.json && chmod 600 ~/.gstack/worker.json
-GSTACK_BROKER_URL=wss://gstack-broker.fly.dev/v1/workers/connect python3 ~/gstack-joins-meeting/hosted/worker.py`
-    : null;
+  const install = key ? brainInstallCommand(key) : null;
 
   return (
     <section className="space-y-6">

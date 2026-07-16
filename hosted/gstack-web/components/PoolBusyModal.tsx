@@ -1,32 +1,23 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 
 /**
  * Shown when /api/dispatch returns 503 because every brain in the demo
- * pool is currently busy. Two outs: wait for a slot (auto-retry on a
- * countdown), or bring your own brain (link to /byob — Phase C).
+ * pool is currently busy (rare now that the broker queues dispatches).
+ * Two outs: try again manually, or bring your own brain.
+ *
+ * Deliberately NO auto-retry: the old 30s countdown re-POSTed the dispatch
+ * forever, so a user who walked away could get specialists dispatched into
+ * their meeting minutes later — surprise billing. Retry is explicit now.
  */
 export function PoolBusyModal({
   open, onClose, onRetry,
 }: {
   open: boolean;
   onClose: () => void;
-  /** Called when the countdown hits 0 or the user clicks Retry now. */
+  /** Called when the user clicks "Try again". */
   onRetry: () => void;
 }) {
-  const [tick, setTick] = useState(30);
-  useEffect(() => {
-    if (!open) { setTick(30); return; }
-    const id = setInterval(() => {
-      setTick((t) => {
-        if (t <= 1) { onRetry(); return 30; }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [open, onRetry]);
-
   if (!open) return null;
 
   return (
@@ -58,16 +49,12 @@ export function PoolBusyModal({
         <p className="text-[13.5px] text-[var(--color-fg-soft)] leading-snug mb-5">
           Each gstack specialist needs a Claude Code "brain" to power it.
           The demo pool runs a handful, and they're all busy right now.
-          We're auto-retrying in <strong className="text-[var(--color-fg)] mono">{tick}s</strong> —
-          or you can bring your own brain and skip the queue forever.
+          Try again in a minute — or bring your own brain and skip the line forever.
         </p>
 
         <div className="flex flex-col gap-2">
-          <button
-            className="btn btn-primary"
-            onClick={() => { setTick(30); onRetry(); }}
-          >
-            Retry now
+          <button className="btn btn-primary" onClick={onRetry}>
+            Try again
           </button>
           <Link
             href="/byob"
