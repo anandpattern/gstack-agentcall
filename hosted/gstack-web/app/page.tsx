@@ -66,11 +66,14 @@ function MyBrainStatus() {
   const { data: keysResp } = useApiSWR<{ keys: WorkerKey[] }>("/api/worker-keys");
   const { data: workersResp } = useApiSWR<{ workers: Worker[] }>("/api/workers", { refreshInterval: 5000 });
   const keys = (keysResp?.keys ?? []).filter((k) => !k.revoked);
-  if (keys.length === 0) return null;
   const workers = workersResp?.workers ?? [];
   const online = keys.filter((k) => workers.some((w) => w.key_prefix === k.key_hash_prefix));
   // Sticky so a single broker poll that misses the brain doesn't flap the dot.
+  // MUST be called before any early return — a hook after a conditional
+  // return changes the hook order between renders (React #310, took prod
+  // down with a client-side exception on 2026-07-17).
   const live = useSticky(online.length > 0);
+  if (keys.length === 0) return null;
   return (
     <Link href="/byob" className="card flex items-center gap-3 mb-6 hover:bg-[var(--color-panel-2)] transition">
       <span className={`dot ${live ? "dot-ok pulse" : "dot-mute"}`} />
