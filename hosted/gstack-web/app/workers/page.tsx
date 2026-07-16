@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { OnboardingFlow } from "@/components/OnboardingFlow";

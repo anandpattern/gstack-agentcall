@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useState } from "react";
 
 type ToastKind = "info" | "ok" | "err";
 type Toast = { id: number; kind: ToastKind; title: string; body?: string };
@@ -31,8 +31,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ToastView({ t, onDismiss }: { t: Toast; onDismiss: () => void }) {
-  const [show, setShow] = useState(false);
-  useEffect(() => { setShow(true); }, []);
   const ring =
     t.kind === "ok"  ? "border-[var(--color-ok)]/40"   :
     t.kind === "err" ? "border-[var(--color-bad)]/40"  :
