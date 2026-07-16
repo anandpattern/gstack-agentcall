@@ -37,8 +37,24 @@ export function MemberActiveCalls() {
   const [leaving, setLeaving] = useState<{ id: string; until: number } | null>(null);
   const leavingVisible =
     !!leaving && Date.now() < leaving.until && !active.some((a) => a.id === leaving.id);
+  // A dispatch that died abnormally used to vanish without a trace — the user
+  // sat wondering whether anything happened at all (live-test feedback). Show
+  // the most recent one from the last 10 min with a plain-language reason.
+  const [dismissedDead, setDismissedDead] = useState<string | null>(null);
+  const FRESH_MS = 10 * 60 * 1000;
+  const lastDead = all.find((a) => {
+    const reason = (a.detail as { reason?: string } | undefined)?.reason;
+    const abnormal =
+      a.status === "failed" ||
+      (a.status === "ended" && reason === "worker_disconnected") ||
+      (a.status === "cancelled" && reason === "queue_expired");
+    const t = a.ended_at ?? a.created_at;
+    return abnormal && !!t && Date.now() - new Date(t).getTime() < FRESH_MS;
+  });
+  const deadVisible = !!lastDead && dismissedDead !== lastDead.id &&
+    active.length === 0 && queued.length === 0 && !leavingVisible;
 
-  if (active.length === 0 && queued.length === 0 && !leavingVisible &&
+  if (active.length === 0 && queued.length === 0 && !leavingVisible && !deadVisible &&
       (!lastWithNotes || dismissedNotes === lastWithNotes.id)) return null;
 
   async function recall(a: Assignment) {
@@ -74,6 +90,9 @@ export function MemberActiveCalls() {
       {queued.map((a) => <QueuedCard key={a.id} a={a} onCancel={() => cancel(a.id)} />)}
       {active.map((a) => <CallCard key={a.id} a={a} onEnd={() => recall(a)} />)}
       {leavingVisible && <LeavingCard />}
+      {deadVisible && lastDead && (
+        <DeadDispatchCard a={lastDead} onDismiss={() => setDismissedDead(lastDead.id)} />
+      )}
       {lastWithNotes && dismissedNotes !== lastWithNotes.id &&
         active.length === 0 && queued.length === 0 && (
         <NotesCard a={lastWithNotes} onDismiss={() => setDismissedNotes(lastWithNotes.id)} />
@@ -206,6 +225,32 @@ function CallCard({ a, onEnd }: { a: Assignment; onEnd: () => void }) {
       )}
 
       <Transcript aid={a.id} specialists={a.specialists} />
+    </div>
+  );
+}
+
+/* A dispatch that died abnormally — plain-language reason + a way forward,
+ * instead of silently vanishing. */
+function DeadDispatchCard({ a, onDismiss }: { a: Assignment; onDismiss: () => void }) {
+  const reason = (a.detail as { reason?: string } | undefined)?.reason;
+  const msg =
+    reason === "worker_disconnected"
+      ? "The brain lost its connection mid-dispatch, so the specialists couldn't join. The pool is back — dispatch again below."
+      : reason === "queue_expired"
+        ? "No brain freed up within 10 minutes, so this dispatch was dropped from the line. Try again below."
+        : "This dispatch couldn't start. Try again below — if it keeps failing, the pool may be down.";
+  return (
+    <div className="surface p-4 flex items-start gap-3 anim-fade" role="status">
+      <span className="dot dot-bad shrink-0 mt-1" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-medium">Your specialists didn't make it into the meeting</div>
+        <div className="text-[12px] text-[var(--color-muted)] mt-0.5">{msg}</div>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-[var(--color-muted)] hover:text-[var(--color-fg)] text-[16px] leading-none shrink-0"
+        aria-label="Dismiss"
+      >×</button>
     </div>
   );
 }

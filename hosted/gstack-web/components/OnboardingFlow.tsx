@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { brainInstallCommand } from "@/lib/brain-install";
+import { useMintedBrainLive } from "@/lib/useBrainLive";
 import type { User } from "@/lib/types";
 
 /**
@@ -102,17 +103,31 @@ export function OnboardingFlow({ onMinted }: { onMinted: () => void }) {
           <pre className="surface p-4 bg-[var(--color-bg-soft)] text-[11.5px] mono leading-relaxed overflow-x-auto whitespace-pre-wrap">
 {install}
           </pre>
+          {/* (step 3 rendered below via WaitForGreenStep) */}
 
-          <div className="flex items-center gap-3 pt-2">
-            <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">3</span>
-            <div className="flex-1">
-              <div className="font-semibold text-[14px]">Wait for the green dot</div>
-              <div className="text-[12px] text-[var(--color-muted)]">Once the brain connects, it shows up in the right rail. Then dispatch.</div>
-            </div>
-            <span className="dot dot-warn pulse" />
-          </div>
+          <WaitForGreenStep />
         </div>
       )}
+    </div>
+  );
+}
+
+/* Step 3 — honest connection status: grey until the freshly-minted brain
+ * connects, green when live (5s poll). Was a hardcoded blinking orange dot. */
+function WaitForGreenStep() {
+  const { live } = useMintedBrainLive(true);
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">3</span>
+      <div className="flex-1">
+        <div className="font-semibold text-[14px]">{live ? "Your brain is live" : "Wait for the green dot"}</div>
+        <div className="text-[12px] text-[var(--color-muted)]">
+          {live
+            ? "Connected — it shows up in the right rail. Now dispatch."
+            : "Grey until the brain connects — flips green automatically (checks every 5 seconds)."}
+        </div>
+      </div>
+      <span className={`dot ${live ? "dot-ok pulse" : "dot-mute"}`} />
     </div>
   );
 }

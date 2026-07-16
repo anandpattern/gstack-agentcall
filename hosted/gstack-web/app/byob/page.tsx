@@ -5,6 +5,7 @@ import { SignedIn, SignedOut, SignInButton } from "@/lib/auth";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { brainInstallCommand } from "@/lib/brain-install";
+import { useMintedBrainLive } from "@/lib/useBrainLive";
 import type { Worker, WorkerKey } from "@/lib/types";
 
 /**
@@ -168,18 +169,30 @@ function Creator() {
         </div>
       )}
 
-      {install && (
-        <div className="card flex items-center gap-3">
-          <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold">3</span>
-          <div className="flex-1">
-            <div className="font-semibold text-[14px]">Wait for the green dot</div>
-            <div className="text-[12px] text-[var(--color-muted)]">Once your brain connects, dispatches from your account route to it first.</div>
-          </div>
-          <span className="dot dot-warn pulse" />
-          <Link href="/" className="btn btn-outline text-[12px]">Dashboard</Link>
-        </div>
-      )}
+      {install && <WaitForGreen />}
     </section>
+  );
+}
+
+/* Step 3 — honest connection status. Grey while the freshly-minted brain
+ * hasn't connected, green + relabeled the moment it does (5s poll). Was a
+ * hardcoded blinking orange dot that never changed (live-test feedback). */
+function WaitForGreen() {
+  const { live } = useMintedBrainLive(true);
+  return (
+    <div className="card flex items-center gap-3">
+      <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">3</span>
+      <div className="flex-1">
+        <div className="font-semibold text-[14px]">{live ? "Your brain is live" : "Wait for the green dot"}</div>
+        <div className="text-[12px] text-[var(--color-muted)]">
+          {live
+            ? "Connected — dispatches from your account route to it first."
+            : "Grey until your brain connects — this flips green automatically (checks every 5 seconds)."}
+        </div>
+      </div>
+      <span className={`dot ${live ? "dot-ok pulse" : "dot-mute"}`} />
+      <Link href="/" className="btn btn-outline text-[12px]">Dashboard</Link>
+    </div>
   );
 }
 
