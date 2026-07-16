@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import type { User, Assignment, Worker } from "@/lib/types";
@@ -43,6 +44,9 @@ export default function AdminPage() {
         <Metric label="Active calls"     value={activeNow} />
         <Metric label="Total minutes"    value={totalMin} />
       </div>
+
+      {/* live ops — every active call + queue, with end/cancel controls */}
+      <LiveOps />
 
       {/* users */}
       <section>
@@ -165,6 +169,129 @@ function Metric({ label, value, sub }: { label: string; value: number | string; 
       <div className="label-cap">{label}</div>
       <div className="text-[24px] font-semibold mt-1 tracking-tight">{value}</div>
       {sub && <div className="text-[11px] text-[var(--color-muted)] mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+/* ─── Live ops ─────────────────────────────────────────────────────────
+ * The admin's control surface for what's happening RIGHT NOW: every live
+ * call (any user) with an End button, and the dispatch queue with Cancel.
+ * The broker's /api/recall and /api/assignments/{id}/cancel are already
+ * admin-aware (bypass ownership), so this is pure UI. Polls every 5s. */
+
+function useTicker(): number {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setT((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return t;
+}
+
+function LiveOps() {
+  const call = useApi();
+  const toast = useToast();
+  const { data, mutate } = useApiSWR<{ assignments: Assignment[] }>(
+    "/api/assignments", { refreshInterval: 5000 });
+  const all = data?.assignments ?? [];
+  const live = all.filter((a) => a.status === "started");
+  const queued = all.filter((a) => a.status === "queued");
+
+  async function end(a: Assignment) {
+    if (!confirm(`End this call? The specialists leave the meeting immediately.`)) return;
+    try {
+      const r = await call<{ recalled: number }>("/api/recall", {
+        method: "POST",
+        body: JSON.stringify(a.worker_id ? { worker_id: a.worker_id } : {}),
+      });
+      toast.push({ kind: "ok", title: "Call ended", body: `${r.recalled} brain${r.recalled === 1 ? "" : "s"} freed` });
+      mutate();
+    } catch (e) {
+      toast.push({ kind: "err", title: "Couldn't end call", body: (e as Error).message });
+    }
+  }
+
+  async function cancel(a: Assignment) {
+    try {
+      await call(`/api/assignments/${a.id}/cancel`, { method: "POST", body: "{}" });
+      toast.push({ kind: "ok", title: "Removed from queue" });
+      mutate();
+    } catch (e) {
+      toast.push({ kind: "err", title: "Couldn't cancel", body: (e as Error).message });
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="text-[15px] font-semibold mb-3">
+        Live calls
+        {live.length > 0 && <span className="text-[12px] text-[var(--color-muted)] font-normal ml-1.5">({live.length})</span>}
+      </h2>
+      {live.length === 0 ? (
+        <div className="surface p-4 text-[12.5px] text-[var(--color-muted)]">No live calls right now.</div>
+      ) : (
+        <div className="space-y-2">
+          {live.map((a) => <LiveCallRow key={a.id} a={a} onEnd={() => end(a)} />)}
+        </div>
+      )}
+
+      {queued.length > 0 && (
+        <>
+          <h2 className="text-[15px] font-semibold mb-3 mt-6">
+            Queue <span className="text-[12px] text-[var(--color-muted)] font-normal ml-1.5">({queued.length} waiting)</span>
+          </h2>
+          <div className="space-y-2">
+            {queued.map((a, i) => (
+              <div key={a.id} className="card flex flex-wrap items-center gap-3">
+                <span className="mono text-[12px] text-[var(--color-muted)] shrink-0">#{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium truncate">{a.specialists.join(", ")}</div>
+                  <div className="text-[11px] text-[var(--color-muted)] mono truncate">{a.user_id}</div>
+                </div>
+                <button className="btn btn-outline text-[11px] py-1.5 px-2.5 shrink-0" onClick={() => cancel(a)}>
+                  Cancel
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function LiveCallRow({ a, onEnd }: { a: Assignment; onEnd: () => void }) {
+  useTicker();
+  const start = a.dispatched_at
+    ? new Date(a.dispatched_at).getTime()
+    : a.created_at ? new Date(a.created_at).getTime() : Date.now();
+  const elapsed = Math.max(0, Math.round((Date.now() - start) / 1000));
+  const meetHost = (() => { try { return new URL(a.meet_url).hostname; } catch { return a.meet_url; } })();
+  return (
+    <div className="card flex flex-wrap items-center gap-3">
+      <span className="dot dot-warn pulse shrink-0" />
+      <div className="flex -space-x-1 shrink-0">
+        {a.specialists.slice(0, 5).map((id) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={id} src={`/avatars/${id}.svg`} alt="" title={id} width={22} height={22}
+               className="w-[22px] h-[22px] rounded-full ring-1 ring-[var(--color-panel)]" loading="lazy" />
+        ))}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-medium truncate">{a.specialists.join(", ")}</div>
+        <div className="text-[11px] text-[var(--color-muted)] mono flex items-center gap-2 flex-wrap">
+          <span>{String(Math.floor(elapsed / 60)).padStart(2, "0")}:{String(elapsed % 60).padStart(2, "0")}</span>
+          <span className="opacity-50">·</span>
+          <span className="truncate">{meetHost}</span>
+          <span className="opacity-50">·</span>
+          <span className="truncate">{a.user_id}</span>
+        </div>
+      </div>
+      <a href={a.meet_url} target="_blank" rel="noopener noreferrer"
+         className="btn btn-outline text-[11px] py-1.5 px-2.5 shrink-0">Open</a>
+      <button className="btn btn-danger text-[11px] py-1.5 px-2.5 shrink-0" onClick={onEnd}>
+        End call
+      </button>
     </div>
   );
 }
