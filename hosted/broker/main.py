@@ -252,6 +252,7 @@ async def try_dispatch_queued() -> None:
             await worker.ws.send_str(json.dumps(msg))
         except Exception as e:
             print(f"[queue] send to {worker.id} failed: {e}", flush=True)
+            WORKERS.pop(worker.id, None)  # socket is dead — evict, retry next pump
             continue
         worker.state = "busy"
         worker.last_assignment_id = item["id"]
@@ -266,6 +267,27 @@ async def try_dispatch_queued() -> None:
 
 def _hash_key(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def evict_dead_workers() -> None:
+    """Drop workers whose WebSocket is already closed from the registry.
+
+    A worker process that dies mid-replacement can leave a half-dead socket
+    that aiohttp hasn't reaped yet — send_str() into it does NOT raise, so a
+    dispatch handed to it silently goes nowhere (live-test bug 2026-07-16: an
+    assignment sat 'started' forever on a ghost). Evict on sight, and mark any
+    in-flight assignment ended so the dashboard never shows a phantom call.
+    """
+    for wid, w in list(WORKERS.items()):
+        if not w.ws.closed:
+            continue
+        WORKERS.pop(wid, None)
+        print(f"[reap] dropped dead worker {wid} (ws closed)", flush=True)
+        if w.state == "busy" and w.last_assignment_id:
+            aid = w.last_assignment_id
+            PROGRESS.pop(aid, None)
+            asyncio.create_task(db.update_assignment_status(
+                aid, "ended", {"reason": "worker_disconnected"}))
 
 
 def pick_idle_worker_for(user_id: str, is_admin: bool,
@@ -285,6 +307,7 @@ def pick_idle_worker_for(user_id: str, is_admin: bool,
     one admin runs a few brains on their laptop and every signed-in
     member can dispatch against that pool.
     """
+    evict_dead_workers()  # never hand an assignment to a half-dead socket
     own = [w for w in WORKERS.values() if w.state == "idle" and w.owner_user_id == user_id]
     own.sort(key=lambda w: w.last_assignment_at or 0)
     if own:
@@ -409,6 +432,7 @@ async def dispatch(req: web.Request) -> web.Response:
     try:
         await worker.ws.send_str(json.dumps(msg))
     except Exception as e:
+        WORKERS.pop(worker.id, None)  # socket is dead — evict so retries route elsewhere
         return web.json_response({"error": f"worker send failed: {e}"}, status=502)
 
     worker.state = "busy"
@@ -932,6 +956,7 @@ async def duration_sweep_loop() -> None:
     while True:
         try:
             await asyncio.sleep(30)
+            evict_dead_workers()  # periodic reap: half-dead sockets leave the registry within 30s
             now = time.time()
             for w in list(WORKERS.values()):
                 if not (w.state == "busy" and w.last_assignment_at
