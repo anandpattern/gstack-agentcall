@@ -42,6 +42,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -64,10 +65,49 @@ HERE = Path(__file__).resolve().parent
 # so the hosted dashboard gets a live transcript without the brain (the
 # Claude session) having to know the broker exists.
 _UID = os.getuid() if hasattr(os, "getuid") else 0
-BUS_DIR       = Path(f"/tmp/gstack-intelligence-{_UID}")
+# POSIX stays on "/tmp" exactly as before; only Windows needs %TEMP%
+# (a bare "/tmp" there resolves against the current drive). Matches the
+# same gating in server.py / specialist_runner.py so all three agree.
+_TMP = Path(tempfile.gettempdir()) if os.name == "nt" else Path("/tmp")
+BUS_DIR       = _TMP / f"gstack-intelligence-{_UID}"
 INBOX_PATH    = BUS_DIR / "inbox.jsonl"
 OUTBOX_DIR    = BUS_DIR / "outbox"
 SUMMARIES_DIR = BUS_DIR / "summaries"
+
+
+def _pid_alive(pid: int) -> bool:
+    """Liveness probe. POSIX: signal-0, exactly as before. Windows:
+    os.kill(pid, 0) calls TerminateProcess — it would KILL the runner it is
+    only meant to check — so query the process handle instead."""
+    if os.name == "nt":
+        try:
+            pid = int(pid)
+        except Exception:
+            return False
+        if pid <= 0:
+            return False
+        import ctypes
+        from ctypes import wintypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        k = ctypes.windll.kernel32
+        k.OpenProcess.restype = wintypes.HANDLE
+        k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return False
+        try:
+            code = wintypes.DWORD()
+            if not k.GetExitCodeProcess(h, ctypes.byref(code)):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            k.CloseHandle(h)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -140,8 +180,25 @@ def ensure_server(port: int, log_path: Path) -> Optional[subprocess.Popen]:
     sys.exit(3)
 
 
+def _parse_json_body(raw: bytes) -> dict:
+    """Parse a response body, tolerating non-JSON (an HTML error page, a
+    plain-text traceback, a non-gstack server squatting the port). json.loads
+    raising here used to propagate out of http_post and kill the calling
+    asyncio task mid-teardown ("Task exception was never retrieved") —
+    observed in production when a stray `python -m http.server` held :8765."""
+    text = raw.decode("utf-8", "replace").strip()
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {"body": parsed}
+    except json.JSONDecodeError:
+        return {"error": text[:300]}
+
+
 def http_post(port: int, path: str, body: dict, timeout: float = 5.0) -> tuple[int, dict]:
-    """POST JSON to the local server and return (status, body)."""
+    """POST JSON to the local server and return (status, body). Never raises
+    on a malformed response — callers always get a (status, dict) tuple."""
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}{path}",
@@ -151,9 +208,9 @@ def http_post(port: int, path: str, body: dict, timeout: float = 5.0) -> tuple[i
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, json.loads(r.read().decode("utf-8") or "{}")
+            return r.status, _parse_json_body(r.read())
     except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read().decode("utf-8") or "{}")
+        return e.code, _parse_json_body(e.read())
     except Exception as e:
         return 0, {"error": str(e)}
 
@@ -438,12 +495,9 @@ def _start_bus_tasks(state: State) -> None:
                     pass
                 alive = False
                 for pid in pids:
-                    try:
-                        os.kill(pid, 0)
+                    if _pid_alive(pid):
                         alive = True
                         break
-                    except OSError:
-                        continue
                 if not alive:
                     emit({"type": "info", "message": f"all runners gone for {aid} — natural end"})
                     await _end_assignment(state, aid, do_recall=False,
@@ -596,7 +650,7 @@ async def main_async(args: argparse.Namespace) -> None:
 
     # Start local server.py if not already up — the worker dispatches
     # against it on assignment.
-    server_proc = ensure_server(args.server_port, Path("/tmp") / f"gstack-worker-{os.getuid()}.log")
+    server_proc = ensure_server(args.server_port, _TMP / f"gstack-worker-{_UID}.log")
 
     state = State(args.server_port)
     asyncio.create_task(stdin_reader(state))
