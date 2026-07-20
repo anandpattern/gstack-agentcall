@@ -28,6 +28,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
@@ -42,10 +43,18 @@ from pathlib import Path
 # Without this, every secret on the dev's shell (AWS keys, GitHub tokens,
 # unrelated API keys) gets handed to a vendored third-party bridge.
 _SAFE_ENV_KEYS = frozenset({
+    # POSIX / cross-platform
     "PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD",
     "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ",
     "PYTHONUNBUFFERED", "PYTHONPATH",
     "AGENTCALL_API_KEY", "AGENTCALL_API_URL",
+    # Windows OS essentials — the interpreter needs these just to start, and
+    # for TLS/socket, temp-dir, and home-dir (~/.agentcall) resolution.
+    # These names don't exist on POSIX, so listing them is harmless there.
+    "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT",
+    "TEMP", "TMP", "APPDATA", "LOCALAPPDATA",
+    "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "USERNAME",
+    "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
 })
 
 
@@ -57,10 +66,24 @@ def _looks_like_runner(pid: int) -> bool:
     """Verify a PID's argv looks like one of our specialist_runner children.
 
     Defends against PID re-use: if the OS re-assigned the PID we recorded
-    in active.json, we don't want /recall to SIGTERM whatever now holds it.
-    Uses `ps` (POSIX, no extra deps) so this works on macOS and Linux.
+    in active.json, we don't want /recall to kill whatever now holds it.
+    Cross-platform: `ps` on POSIX, `wmic` on Windows. If the command line
+    can't be introspected (tool missing), fall back to a non-destructive
+    liveness check so /recall still works on PIDs we recorded this session.
     """
     try:
+        if os.name == "nt":
+            try:
+                out = subprocess.run(
+                    ["wmic", "process", "where", f"ProcessId={int(pid)}",
+                     "get", "CommandLine", "/format:list"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if out.returncode == 0 and out.stdout.strip():
+                    return "specialist_runner.py" in out.stdout
+            except Exception:
+                pass
+            return _pid_alive(pid)  # couldn't read argv — don't block recall
         out = subprocess.run(
             ["ps", "-p", str(int(pid)), "-o", "args="],
             capture_output=True, text=True, timeout=2,
@@ -106,17 +129,22 @@ RUNNER = ROOT / "specialist_runner.py"
 # active.json (which /recall trusts for PIDs to SIGTERM).
 def _log_dir() -> Path:
     uid = os.getuid() if hasattr(os, "getuid") else 0
-    p = Path(f"/tmp/gstack-specialists-{uid}")
+    # POSIX stays on "/tmp" exactly as before (docs + brain-status.sh
+    # reference it, and macOS's per-user $TMPDIR could otherwise split the
+    # bus between the server and the scrubbed-env runner). Only Windows needs
+    # %TEMP% (gettempdir): there a bare "/tmp" resolves against the drive.
+    base = Path(tempfile.gettempdir()) if os.name == "nt" else Path("/tmp")
+    p = base / f"gstack-specialists-{uid}"
     p.mkdir(parents=True, exist_ok=True, mode=0o700)
     try:
         os.chmod(p, 0o700)
     except Exception:
         pass
     # Back-compat symlink (some older code paths reference the unscoped dir).
-    legacy = Path("/tmp/gstack-specialists")
+    legacy = base / "gstack-specialists"
     try:
         if not legacy.exists():
-            legacy.symlink_to(p)
+            legacy.symlink_to(p, target_is_directory=True)
     except Exception:
         pass
     return p
@@ -332,6 +360,25 @@ def _active_session_dir() -> Path | None:
     return None
 
 
+def _has_live_listener() -> bool:
+    """True if a LIVE runner in the current session is the listener.
+
+    Only the listener forwards user.message events to the intelligence bus,
+    so a session without one is deaf — the brain never hears the room and
+    every specialist sits mute. That happened whenever the original listener
+    died (recall, crash, session-limit teardown) while a sibling runner
+    survived: the session dir stayed "active", so every later dispatch joined
+    as a non-listener and nobody was left listening. Callers re-elect when
+    this returns False.
+    """
+    with _active_lock:
+        data = _load_active()
+        for r in data.get("runners", []):
+            if r.get("listener") and _pid_alive(r.get("pid")):
+                return True
+    return False
+
+
 def _pid_alive(pid) -> bool:
     try:
         pid = int(pid)
@@ -339,6 +386,26 @@ def _pid_alive(pid) -> bool:
         return False
     if pid <= 0:
         return False
+    if os.name == "nt":
+        # os.kill(pid, 0) on Windows calls TerminateProcess — it would KILL
+        # the process we're only trying to probe. Query the handle instead.
+        import ctypes
+        from ctypes import wintypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        k = ctypes.windll.kernel32
+        k.OpenProcess.restype = wintypes.HANDLE
+        k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return False
+        try:
+            code = wintypes.DWORD()
+            if not k.GetExitCodeProcess(h, ctypes.byref(code)):
+                return False
+            return code.value == STILL_ACTIVE
+        finally:
+            k.CloseHandle(h)
     try:
         os.kill(pid, 0)
         return True
@@ -473,6 +540,18 @@ def _delete_agentcall_call(call_id: str) -> bool:
         return False
 
 
+def _terminate_runner(pid: int) -> None:
+    """Windows force-kill: take down a runner AND its bridge child.
+
+    Windows has no real SIGTERM and does not reap a dead parent's children,
+    so kill the whole process tree with taskkill /T (the bridge is the
+    runner's direct child). POSIX recall never calls this — it SIGTERMs the
+    runner directly, exactly as always.
+    """
+    subprocess.run(["taskkill", "/F", "/T", "/PID", str(int(pid))],
+                   capture_output=True)
+
+
 def recall(targets: list[str] | None, all_targets: bool) -> dict:
     """SIGTERM matching runners' whole process tree AND end their cloud
     AgentCall calls. Returns {stopped:[…], missing:[…], calls_ended:[…]}."""
@@ -523,13 +602,19 @@ def recall(targets: list[str] | None, all_targets: bool) -> dict:
             missing.append(f"{spec_id}:pid_no_longer_ours")
             continue
         try:
-            # Reap the whole process TREE, not just the runner (feedback G):
-            # runners spawn with start_new_session=True, so killpg on the
-            # runner pid takes down the bridge, launch-visual.sh, tail -f too.
-            try:
-                os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                os.kill(int(pid), signal.SIGTERM)
+            if os.name == "nt":
+                # Windows has no killpg / SIGTERM and won't reap a dead
+                # parent's children, so take down the runner AND its bridge
+                # child as a process tree via taskkill /T.
+                _terminate_runner(pid)
+            else:
+                # Reap the whole process TREE, not just the runner (feedback G):
+                # runners spawn with start_new_session=True, so killpg on the
+                # runner pid takes down the bridge, launch-visual.sh, tail -f too.
+                try:
+                    os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    os.kill(int(pid), signal.SIGTERM)
             stopped.append({"id": spec_id, "pid": pid, "name": r.get("name")})
             _end_cloud_call(spec_id)   # evict the cloud bot, not just local
         except ProcessLookupError:
@@ -684,9 +769,13 @@ class Handler(BaseHTTPRequestHandler):
             session_dir.mkdir(parents=True, exist_ok=True)
             new_session = True
 
+        # The first spawn becomes the LISTENER in a fresh session — or in a
+        # reused one whose listener has since died (otherwise the meeting is
+        # deaf: nobody forwards user.message to the brain).
+        needs_listener = new_session or not _has_live_listener()
+
         for i, spec_id in enumerate(specs):
-            # First spawn in a fresh session becomes the LISTENER.
-            is_listener = (new_session and i == 0)
+            is_listener = (needs_listener and i == 0)
             try:
                 pid, log_path = spawn_specialist(
                     spec_id, meet_url, session_dir,
@@ -705,6 +794,9 @@ class Handler(BaseHTTPRequestHandler):
                     "ts":       ts,
                     "meetUrl":  meet_url,
                     "logPath":  log_path,
+                    # Persisted so _has_live_listener() can tell whether the
+                    # session still has an ear when the next dispatch lands.
+                    "listener": is_listener,
                 })
             except Exception as e:
                 errors[spec_id] = str(e)
@@ -927,6 +1019,71 @@ def _regen_specialists_js() -> None:
     out_path.write_text(body, encoding="utf-8")
 
 
+def _ensure_avatar_assets() -> None:
+    """Guarantee avatar-page/avatars resolves to the root avatars/ SVGs.
+
+    The repo commits avatar-page/avatars as a symlink -> ../avatars so the
+    avatar HTTP server (rooted at avatar-page/) can serve the SVGs without
+    duplicating them. Two things break that link in the wild:
+      • git on Windows (core.symlinks=false default) checks it out as a
+        plain text file containing "../avatars", and
+      • ZIP archives (e.g. GitHub "Download ZIP") don't carry symlinks on
+        ANY platform.
+    Heal by recreating the platform's real link — POSIX symlink, or an NTFS
+    directory junction on Windows (no admin rights needed) — and only as a
+    last resort fall back to copying the SVGs (refreshed every boot). A
+    working link is left untouched.
+    """
+    page_avatars = ROOT / "avatar-page" / "avatars"
+    src = ROOT / "avatars"
+    if not src.is_dir():
+        return
+    try:
+        # Working symlink or junction (or anything else that already
+        # resolves onto the canonical dir) — nothing to do.
+        if page_avatars.is_dir():
+            try:
+                if page_avatars.resolve() == src.resolve():
+                    return
+            except OSError:
+                pass
+        # Clear whatever is in the way: the Windows text-file checkout, a
+        # broken symlink, or a stale copied directory from an older heal.
+        if page_avatars.is_symlink() or page_avatars.is_file():
+            page_avatars.unlink()
+        elif page_avatars.is_dir():
+            try:
+                os.rmdir(page_avatars)        # junction / empty dir — never recurses
+            except OSError:
+                import shutil
+                shutil.rmtree(page_avatars)   # real directory of copied files
+
+        # Preferred: recreate the real link, same semantics as the repo's.
+        try:
+            page_avatars.symlink_to(Path("..") / "avatars",
+                                    target_is_directory=True)
+            return
+        except OSError:
+            pass                              # e.g. Windows without Dev Mode
+        if os.name == "nt":
+            r = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(page_avatars), str(src)],
+                capture_output=True)
+            if r.returncode == 0 and (page_avatars / "claude.svg").is_file():
+                return
+
+        # Last resort: copy (works everywhere; re-synced on every boot).
+        import shutil
+        page_avatars.mkdir(parents=True, exist_ok=True)
+        for svg in src.glob("*.svg"):
+            try:
+                shutil.copy2(svg, page_avatars / svg.name)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[warn] could not materialize avatar assets: {e}", file=sys.stderr)
+
+
 def main():
     if not BRIDGE.exists():
         print(f"[warn] bridge.py not found at {BRIDGE}", file=sys.stderr)
@@ -938,6 +1095,8 @@ def main():
     # Regenerate the dashboard JS bundle from the canonical JSON so we
     # have one source of truth (data/specialists.json + data/teams.json).
     _regen_specialists_js()
+
+    _ensure_avatar_assets()   # repair Windows-broken avatars symlink
 
     # Boot the avatar-page server on port 3000 so avatar-mode dispatch
     # always has a target to tunnel to. Skipped if already running.
