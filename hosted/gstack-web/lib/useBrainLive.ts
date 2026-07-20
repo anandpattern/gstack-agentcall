@@ -11,16 +11,21 @@ import type { Worker, WorkerKey } from "@/lib/types";
  *
  * Pass `enabled=false` before a key exists to skip the polling.
  */
-export function useMintedBrainLive(enabled: boolean): { live: boolean } {
+export function useMintedBrainLive(enabled: boolean): { live: boolean; otherOnline: boolean } {
   const { data: keysResp } = useApiSWR<{ keys: WorkerKey[] }>(
     enabled ? "/api/worker-keys" : null);
   const { data: workersResp } = useApiSWR<{ workers: Worker[] }>(
     enabled ? "/api/workers" : null, { refreshInterval: 5000 });
-  if (!enabled) return { live: false };
-  const minted = (keysResp?.keys ?? [])
-    .filter((k) => !k.revoked)
+  if (!enabled) return { live: false, otherOnline: false };
+  const keys = (keysResp?.keys ?? []).filter((k) => !k.revoked);
+  const minted = [...keys]
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0];
-  const live = !!minted &&
-    (workersResp?.workers ?? []).some((w) => w.key_prefix === minted.key_hash_prefix);
-  return { live };
+  const workers = workersResp?.workers ?? [];
+  const live = !!minted && workers.some((w) => w.key_prefix === minted.key_hash_prefix);
+  // A DIFFERENT key of yours is connected — the grey dot isn't a failure,
+  // it just tracks the new key. Surfaced as a sub-line so multi-key users
+  // don't read "grey" as "broken" (design review 2026-07-20).
+  const otherOnline = !live && keys.some(
+    (k) => k !== minted && workers.some((w) => w.key_prefix === k.key_hash_prefix));
+  return { live, otherOnline };
 }

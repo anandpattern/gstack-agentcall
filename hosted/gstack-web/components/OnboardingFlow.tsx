@@ -115,7 +115,7 @@ export function OnboardingFlow({ onMinted }: { onMinted: () => void }) {
 /* Step 3 — honest connection status: grey until the freshly-minted brain
  * connects, green when live (5s poll). Was a hardcoded blinking orange dot. */
 function WaitForGreenStep() {
-  const { live } = useMintedBrainLive(true);
+  const { live, otherOnline } = useMintedBrainLive(true);
   return (
     <div className="flex items-center gap-3 pt-2">
       <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">3</span>
@@ -125,6 +125,11 @@ function WaitForGreenStep() {
           {live
             ? "Connected — it shows up in the right rail. Now dispatch."
             : "Grey until the brain connects — flips green automatically (checks every 5 seconds)."}
+          {!live && otherOnline && (
+            <span className="block mt-0.5 opacity-80">
+              (Another of your brains is already online — this dot tracks the new key only.)
+            </span>
+          )}
         </div>
       </div>
       <span className={`dot ${live ? "dot-ok pulse" : "dot-mute"}`} />

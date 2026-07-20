@@ -3,6 +3,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { SignInButton, SignedIn, SignedOut } from "@/lib/auth";
 import { isDevAuth } from "@/lib/auth-mode";
+import { useApiSWR } from "@/lib/api";
+import { useSticky } from "@/lib/useSticky";
 import { SPECIALISTS, type MarketingSpecialist } from "@/lib/specialists-static";
 import { SpecialistDetailModal } from "./SpecialistDetailModal";
 import { AgentcallWordmark } from "./AgentcallWordmark";
@@ -56,15 +58,30 @@ function Topbar() {
 
 /* ─── hero ──────────────────────────────────────────────────────────── */
 
+/* The hero chip's "live" claim is REAL — same /healthz + sticky logic as the
+ * sidebar dot. When no brain is free the chip drops the claim instead of
+ * faking it (it was hardcoded before — the one dishonest status on the site,
+ * design review 2026-07-20). Catalog + license stay either way. */
+function HeroStatusChip() {
+  const { data, error } = useApiSWR<{ ok: boolean; brains?: number }>(
+    "/healthz", { refreshInterval: 10000, allowSignedOut: true });
+  const live = useSticky(!error && data?.ok === true && (data?.brains ?? 0) > 0);
+  return (
+    <div className="inline-flex items-center gap-2 chip mb-6 sm:mb-7 anim-up max-w-full">
+      <span className={`dot shrink-0 ${live ? "dot-ok pulse" : "dot-mute"}`} />
+      <span className="mono text-[10px] sm:text-[11px] truncate">
+        {live ? "live · " : ""}19 specialists · 6 team presets · MIT
+      </span>
+    </div>
+  );
+}
+
 function Hero() {
   return (
     <section className="relative overflow-hidden">
       <BackgroundGlow />
       <div className="max-w-5xl mx-auto px-6 pt-16 sm:pt-24 pb-16 sm:pb-20 text-center">
-        <div className="inline-flex items-center gap-2 chip mb-6 sm:mb-7 anim-up max-w-full">
-          <span className="dot dot-ok pulse shrink-0" />
-          <span className="mono text-[10px] sm:text-[11px] truncate">live · 19 specialists · 6 team presets · MIT</span>
-        </div>
+        <HeroStatusChip />
 
         <h1 className="text-[40px] sm:text-[64px] md:text-[88px] leading-[1.0] sm:leading-[0.95] tracking-[-0.03em] sm:tracking-[-0.04em] font-semibold anim-up" style={{ animationDelay: "60ms" }}>
           <span className="gradient-text">gstack</span> joins<br/>your meeting.

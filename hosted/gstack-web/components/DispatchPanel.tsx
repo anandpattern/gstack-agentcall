@@ -206,21 +206,10 @@ export function DispatchPanel() {
         </div>
       )}
 
-      {/* HERO */}
+      {/* HERO — one voice: headline, URL, brief. Counts + attribution live on
+          the Specialists header below (design review 2026-07-20). */}
       <section className="surface p-6 anim-up">
-        <div className="flex items-end gap-3 mb-1 flex-wrap">
-          <h1 className="text-[20px] sm:text-[26px] font-semibold tracking-tight">Dispatch your team</h1>
-          <span className="text-[12px] text-[var(--color-muted)] mb-1">{all.length} specialists · {TEAMS.length} team presets</span>
-          <a
-            href="https://github.com/garrytan/gstack"
-            target="_blank" rel="noopener noreferrer"
-            className="ml-auto inline-flex items-center gap-1.5 text-[11.5px] text-[var(--color-fg-soft)] hover:text-[var(--color-fg)] mb-1"
-            title="The 19 specialist personas were open-sourced by Garry Tan. This dashboard just brings them into your meeting."
-          >
-            <span className="w-4 h-4 rounded-full bg-[#ff6b2b] text-white flex items-center justify-center text-[9px] font-bold">G</span>
-            Personas by <span className="text-[var(--color-accent)] underline underline-offset-2">Garry Tan</span>
-          </a>
-        </div>
+        <h1 className="text-[20px] sm:text-[26px] font-semibold tracking-tight mb-1">Dispatch your team</h1>
         <p className="text-[13px] text-[var(--color-fg-soft)] mb-5">Drop a meeting link, pick the specialists you want, hit dispatch.</p>
 
         <div className="flex items-baseline justify-between mb-1.5">
@@ -291,10 +280,22 @@ export function DispatchPanel() {
 
       </section>
 
-      {/* TEAM PRESETS */}
+      {/* SPECIALISTS — single section header owns the counts, the Garry
+          attribution, the preset chips, and the grid (one voice, not three). */}
       <section>
-        <div className="label-cap mb-2">Team presets · one-click pick</div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex items-baseline gap-2 flex-wrap mb-3">
+          <h2 className="text-[15px] font-semibold">Specialists</h2>
+          <span className="text-[12px] text-[var(--color-muted)]">{all.length} across {TEAMS.length} presets</span>
+          <a
+            href="https://github.com/garrytan/gstack"
+            target="_blank" rel="noopener noreferrer"
+            className="ml-auto text-[11.5px] text-[var(--color-muted)] hover:text-[var(--color-fg)]"
+            title="The specialist personas were open-sourced by Garry Tan. This dashboard brings them into your meeting."
+          >
+            Personas by <span className="text-[var(--color-accent)] underline underline-offset-2">Garry Tan</span>
+          </a>
+        </div>
+        <div className="flex gap-2 flex-wrap mb-3">
           {TEAMS.map((t) => {
             const allIn = t.specs.every((s) => picked.has(s));
             return (
@@ -309,11 +310,6 @@ export function DispatchPanel() {
             );
           })}
         </div>
-      </section>
-
-      {/* SPECIALISTS */}
-      <section>
-        <h2 className="text-[15px] font-semibold mb-3">Specialists</h2>
         <div className="flex gap-1.5 flex-wrap mb-4">
           {CATEGORIES.map((c) => (
             <button

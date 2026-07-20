@@ -35,6 +35,9 @@ function AdminDashboard() {
     <div className="flex flex-col xl:flex-row">
       <div className="flex-1 min-w-0 px-6 lg:px-8 py-6 xl:py-8 xl:max-w-3xl 2xl:max-w-5xl">
         {noBrain && <div className="mb-8"><OnboardingFlow onMinted={() => mutate()} /></div>}
+        {/* A live call outranks dispatching a new one — full-width, above the
+            fold, timer + End call unmissable (design review 2026-07-20). */}
+        <MemberActiveCalls />
         <DispatchPanel />
       </div>
       <div className="xl:order-last px-6 lg:px-8 xl:px-0 pb-6 xl:pb-0">

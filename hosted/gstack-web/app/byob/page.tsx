@@ -178,7 +178,7 @@ function Creator() {
  * hasn't connected, green + relabeled the moment it does (5s poll). Was a
  * hardcoded blinking orange dot that never changed (live-test feedback). */
 function WaitForGreen() {
-  const { live } = useMintedBrainLive(true);
+  const { live, otherOnline } = useMintedBrainLive(true);
   return (
     <div className="card flex items-center gap-3">
       <span className="w-9 h-9 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] flex items-center justify-center text-[14px] font-bold shrink-0">3</span>
@@ -188,6 +188,11 @@ function WaitForGreen() {
           {live
             ? "Connected — dispatches from your account route to it first."
             : "Grey until your brain connects — this flips green automatically (checks every 5 seconds)."}
+          {!live && otherOnline && (
+            <span className="block mt-0.5 opacity-80">
+              (Another of your brains is already online — this dot tracks the new key only.)
+            </span>
+          )}
         </div>
       </div>
       <span className={`dot ${live ? "dot-ok pulse" : "dot-mute"}`} />
