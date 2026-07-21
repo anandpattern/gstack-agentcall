@@ -69,8 +69,12 @@ function HeroStatusChip() {
   return (
     <div className="inline-flex items-center gap-2 chip mb-6 sm:mb-7 anim-up max-w-full">
       <span className={`dot shrink-0 ${live ? "dot-ok pulse" : "dot-mute"}`} />
+      {/* Two signals a visitor actually parses at the hero: is it on, and how
+          big is the catalog (+ the open-source badge). "6 team presets" was an
+          in-app concept that meant nothing pre-signup and made the chip read
+          like a debug string. */}
       <span className="mono text-[10px] sm:text-[11px] truncate">
-        {live ? "live · " : ""}19 specialists · 6 team presets · MIT
+        {live ? "live · " : ""}19 specialists · MIT
       </span>
     </div>
   );
