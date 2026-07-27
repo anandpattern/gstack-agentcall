@@ -105,9 +105,19 @@ def _pid_alive(pid: int) -> bool:
             k.CloseHandle(h)
     try:
         os.kill(pid, 0)
-        return True
     except OSError:
         return False
+    # signal 0 succeeds for a ZOMBIE. The runners we watch are Popen children
+    # of server.py that are never wait()ed, so a finished runner lingers as
+    # <defunct> and looks alive forever — which is exactly why the
+    # natural-end watchdog below never fired and the assignment stayed
+    # 'started' (phantom "LIVE" card; /recall answering "0 brains freed").
+    try:
+        out = subprocess.run(["ps", "-o", "state=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=2)
+        return not out.stdout.strip().startswith("Z")
+    except Exception:
+        return True  # can't tell → assume alive rather than kill a live call
 
 
 # ──────────────────────────────────────────────────────────────────────────

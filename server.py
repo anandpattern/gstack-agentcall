@@ -408,13 +408,31 @@ def _pid_alive(pid) -> bool:
             k.CloseHandle(h)
     try:
         os.kill(pid, 0)
-        return True
     except ProcessLookupError:
         return False
     except PermissionError:
         return True
     except Exception:
         return False
+    # signal 0 SUCCEEDS for a zombie: our runners are Popen children that are
+    # never wait()ed, so a finished runner lingers as <defunct> and every
+    # naive liveness probe calls it alive. That made the natural-end watchdog
+    # never fire (assignment stuck 'started' → phantom "LIVE" card, and
+    # /recall reporting "0 brains freed"), and made _has_live_listener() keep
+    # electing a dead listener, leaving the meeting deaf. Treat Z as dead.
+    return not _pid_is_zombie(pid)
+
+
+def _pid_is_zombie(pid: int) -> bool:
+    """True if `pid` exists but has already exited and not been reaped."""
+    if os.name == "nt":
+        return False  # GetExitCodeProcess above already excludes exited procs
+    try:
+        out = subprocess.run(["ps", "-o", "state=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=2)
+        return out.stdout.strip().startswith("Z")
+    except Exception:
+        return False  # can't tell → don't declare a live runner dead
 
 
 # ──────────────────────────────────────────────────────────────────────────────
