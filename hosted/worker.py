@@ -277,16 +277,23 @@ async def handle_assignment(state: State, msg: dict) -> None:
           "specialists": specs, "brief": brief, "mode": mode})
 
     await state.send({"type": "progress", "id": aid, "stage": "launching"})
+    # The key MUST travel in the request body. server.py is a separate process
+    # (often already running and reused, so its env is a stale snapshot), which
+    # means setting AGENTCALL_API_KEY in our own os.environ never reaches the
+    # bridges it spawns. That bug was invisible on the operator's machine —
+    # the bridge silently fell back to ~/.agentcall/config.json — but on a BYOB
+    # user's laptop there is no such file, so their bots never joined the call.
+    # set_transient_key stays as belt-and-braces for a same-process server.
     state.set_transient_key(api_key)
     try:
         code, body = http_post(state.server_port, "/dispatch", {
             "meetUrl": meet_url, "specialists": specs,
             "brief": brief, "mode": mode,
+            "agentcallApiKey": api_key or "",
         }, timeout=20.0)
     finally:
         # Drop the transient key from our env IMMEDIATELY after dispatch —
-        # the bridges have already copied it into their own env via
-        # server.py's _safe_env().
+        # the bridges have already copied it into their own env.
         state.restore_key()
 
     if code == 200:

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useApi, useApiSWR } from "@/lib/api";
 import { useToast } from "@/lib/toast";
 import { SpecialistCard } from "./SpecialistCard";
@@ -142,10 +143,15 @@ export function DispatchPanel() {
           body: "A brain will pick this up the moment one frees. Watch the card above.",
         });
       } else {
+        // The #1 reason a first-timer thinks "it didn't work": the bots are
+        // sitting in the Google Meet lobby and nobody admitted them. Google
+        // only shows that prompt to the meeting HOST. Say so here, at the
+        // exact moment they go looking at the call — the assignment/brain ids
+        // that used to live in this slot were developer noise.
         toast.push({
           kind: "ok",
-          title: `${picked.size} specialist${picked.size === 1 ? "" : "s"} dispatched`,
-          body: `Assignment ${r.assignment_id.slice(0, 12)}… → brain ${r.worker_id}`,
+          title: `${picked.size} specialist${picked.size === 1 ? "" : "s"} on the way`,
+          body: "Now admit them in your Meet — Google shows the host an “Admit” prompt for each one.",
         });
       }
       // optimistic: clear pick & refresh
@@ -237,6 +243,18 @@ export function DispatchPanel() {
           <div className="mt-2 text-[11.5px] text-[var(--color-muted)] flex items-center gap-1.5">
             <span className="dot dot-mute shrink-0" />
             No brain is free right now — dispatches wait in line and fire automatically when one opens up.
+          </div>
+        )}
+        {/* Set expectations while the pool still looks free: it's a small
+            shared demo pool (one live call per brain), so under load people
+            WILL queue. Saying so up-front — with the way to skip it — beats
+            a surprise wait. */}
+        {poolKnown && poolFree && (
+          <div className="mt-2 text-[11.5px] text-[var(--color-muted)] flex items-center gap-1.5">
+            <span className="dot dot-ok shrink-0" />
+            Shared demo pool — capacity is limited, so you may wait in line at busy times.{" "}
+            <Link href="/byob" className="underline hover:text-[var(--color-fg)]">Run your own brain</Link>{" "}
+            to skip the queue.
           </div>
         )}
         {newMeetHelper && (
@@ -375,6 +393,13 @@ export function DispatchPanel() {
             {pending ? "Dispatching…" : poolKnown && !poolFree ? "Join queue →" : "Dispatch →"}
           </button>
         </div>
+        {/* Stated up-front as well as in the post-dispatch toast: the bots land
+            in the Meet lobby and wait, and only the HOST sees the admit prompt.
+            Missing this reads as "the bots never joined". */}
+        <p className="text-[12px] text-[var(--color-muted)] mt-3 leading-snug">
+          They join the lobby first — <strong className="text-[var(--color-fg-soft)] font-medium">admit them from your Meet</strong> and
+          they&apos;re in. Only the meeting host sees that prompt.
+        </p>
       </div>
     </div>
   );

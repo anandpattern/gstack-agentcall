@@ -34,6 +34,7 @@ duplicate events and bot-to-bot feedback loops.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 
@@ -149,7 +150,16 @@ def _is_echo_of_bot(text: str, window_s: float = 30.0) -> bool:
         if rec.get("ts", 0) < cutoff:
             break
         spoken = _norm_text(rec.get("text", ""))
-        if spoken and (norm in spoken or spoken in norm):
+        if not spoken:
+            continue
+        if norm in spoken or spoken in norm:
+            return True
+        # Containment alone misses the common case: STT rarely transcribes the
+        # bot verbatim ("gstack" comes back as "GS TAC", "AIYC"), so a drifted
+        # echo slips through and lands in the transcript as a human turn.
+        # Fall back to a similarity ratio, but only on reasonably long lines
+        # and at a high threshold, so genuine human speech is never dropped.
+        if len(norm) >= 20 and difflib.SequenceMatcher(None, norm, spoken).ratio() >= 0.82:
             return True
     return False
 

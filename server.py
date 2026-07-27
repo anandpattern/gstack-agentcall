@@ -428,6 +428,7 @@ def spawn_specialist(
     brief: str = "",
     mode: str = "audio",
     listener: bool = False,
+    agentcall_api_key: str = "",
 ) -> tuple[int, str]:
     """Spawn a specialist_runner.py subprocess. Returns (pid, log_path).
 
@@ -466,13 +467,25 @@ def spawn_specialist(
     if brief:
         cmd.extend(["--brief", brief])
 
+    # The hosted worker hands us the AgentCall key PER DISPATCH (each user
+    # gets their own: master for the operator pool, a capped key for BYOB).
+    # It has to travel in the request body — the worker is a separate process,
+    # so the key it sets in its own os.environ never reaches us, and when we
+    # were started earlier ("reusing server on :8765") our env is a stale
+    # snapshot anyway. Without this the bridge falls back to
+    # ~/.agentcall/config.json, which only exists on the operator's machine:
+    # every BYOB user's bot would silently fail to join.
+    child_env = _safe_env()
+    if agentcall_api_key:
+        child_env["AGENTCALL_API_KEY"] = agentcall_api_key
+
     proc = subprocess.Popen(
         cmd,
         stdin=subprocess.DEVNULL,
         stdout=log_fh,
         stderr=log_fh,
         cwd=str(ROOT),
-        env=_safe_env(),
+        env=child_env,
         start_new_session=True,
     )
     return proc.pid, str(log_path)
@@ -741,6 +754,13 @@ class Handler(BaseHTTPRequestHandler):
         mode = (body.get("mode") or "avatar").strip().lower()
         if mode not in ("audio", "avatar"):
             mode = "avatar"
+        # Per-dispatch AgentCall key from the hosted worker (see spawn_specialist).
+        # Optional: a local/standalone dispatch has no worker in front of it and
+        # relies on the ambient env / ~/.agentcall/config.json as before.
+        agentcall_api_key = body.get("agentcallApiKey") or body.get("agentcall_api_key") or ""
+        if not isinstance(agentcall_api_key, str):
+            agentcall_api_key = ""
+        agentcall_api_key = agentcall_api_key.strip()
 
         if not validate_meet_url(meet_url):
             return self._send_json(400, {"error": "invalid meetUrl"})
@@ -780,6 +800,7 @@ class Handler(BaseHTTPRequestHandler):
                 pid, log_path = spawn_specialist(
                     spec_id, meet_url, session_dir,
                     brief=brief, mode=mode, listener=is_listener,
+                    agentcall_api_key=agentcall_api_key,
                 )
                 pids[spec_id] = pid
                 spec = SPECIALISTS[spec_id]

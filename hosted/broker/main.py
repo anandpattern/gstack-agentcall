@@ -85,6 +85,10 @@ ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("GSTACK_ALLOWED_ORIGINS", "
 MAX_CALL_MIN            = int(os.environ.get("GSTACK_MAX_CALL_MIN", "45"))
 DEFAULT_CALL_MIN        = 30
 MAX_CONCURRENT_PER_USER = int(os.environ.get("GSTACK_MAX_CONCURRENT", "2"))
+# How long an assignment may sit 'started' with no connected worker before the
+# sweep closes it. Long enough that a worker merely reconnecting (it gets a new
+# in-memory id each time) doesn't get its live call cut out from under it.
+ORPHAN_GRACE_SEC        = int(os.environ.get("GSTACK_ORPHAN_GRACE_SEC", "180"))
 RATE_LIMIT_MAX          = int(os.environ.get("GSTACK_RATE_LIMIT", "10"))
 RATE_LIMIT_WINDOW_SEC   = 60
 _RATE_HITS: dict[str, deque] = {}
@@ -294,14 +298,17 @@ def pick_idle_worker_for(user_id: str, is_admin: bool,
                          admin_user_ids: set[str]) -> Optional[Worker]:
     """Pick an idle brain for a dispatch.
 
-    Routing rules:
-      - Admin: prefer their own idle brain, fall back to ANY idle brain
-        in the system (a "pool admin" can borrow another admin's brain
-        if their own pool is dry).
-      - Member: dispatch against any admin-owned idle brain (the shared
-        demo pool). Their own brains, if any (e.g. via /byob), are tried
-        first because they probably want to drive them; if none online,
-        fall back to the admin pool.
+    Routing rules, admin and member alike:
+      1. your own idle brain, if you're running one (e.g. via /byob) —
+         you almost certainly want to drive your own machine;
+      2. otherwise any ADMIN-owned idle brain: the shared demo pool.
+
+    Nobody is ever routed onto another member's brain. That fallback used to
+    read "any idle worker" for admins, which meant an admin dispatch could
+    land on a member's BYOB laptop — running the call on a stranger's machine
+    and billing their capped key. `is_admin` no longer changes the fallback;
+    it's kept in the signature because callers pass it and the distinction
+    still matters elsewhere (quota, admin endpoints).
 
     This is the heart of the "members don't need their own worker" UX:
     one admin runs a few brains on their laptop and every signed-in
@@ -312,15 +319,12 @@ def pick_idle_worker_for(user_id: str, is_admin: bool,
     own.sort(key=lambda w: w.last_assignment_at or 0)
     if own:
         return own[0]
-    if is_admin:
-        any_idle = [w for w in WORKERS.values() if w.state == "idle"]
-    else:
-        any_idle = [w for w in WORKERS.values()
-                    if w.state == "idle" and w.owner_user_id in admin_user_ids]
-    if not any_idle:
+    pool = [w for w in WORKERS.values()
+            if w.state == "idle" and w.owner_user_id in admin_user_ids]
+    if not pool:
         return None
-    any_idle.sort(key=lambda w: w.last_assignment_at or 0)
-    return any_idle[0]
+    pool.sort(key=lambda w: w.last_assignment_at or 0)
+    return pool[0]
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -981,6 +985,35 @@ async def duration_sweep_loop() -> None:
                 # 30s; the worker's idle-ack (or the orphan sweep) resets state.
                 w.last_assignment_at = None
                 print(f"[sweep] force-ended {aid} (> {MAX_CALL_MIN}min)", flush=True)
+
+            # ── orphan pass ────────────────────────────────────────────────
+            # The loop above can only see workers that are still CONNECTED.
+            # When a worker dies mid-call (laptop sleeps, terminal closed,
+            # process killed) its in-worker natural-end watchdog dies with it,
+            # so the assignment sits at status='started' forever: the dashboard
+            # renders a phantom "LIVE" card and the row keeps consuming the
+            # owner's concurrency slot. Nothing else ever closes these, so
+            # close them here — server-side, where it survives the client.
+            try:
+                live_ids = [w.id for w in WORKERS.values()]
+                stale = await db.list_stale_started_assignments(
+                    max_age_sec=cap, orphan_grace_sec=ORPHAN_GRACE_SEC,
+                    live_worker_ids=live_ids)
+                for row in stale:
+                    aid = row["id"]
+                    reason = ("max_duration" if row["age_sec"] > cap
+                              else "worker_gone")
+                    await db.update_assignment_status(
+                        aid, "ended", {"reason": reason,
+                                       "age_sec": row["age_sec"],
+                                       "swept": True})
+                    await db.audit(row["user_id"], f"recall.{reason}",
+                                   {"assignment_id": aid,
+                                    "age_sec": row["age_sec"]})
+                    print(f"[sweep] closed orphan {aid} ({reason}, "
+                          f"{row['age_sec']}s)", flush=True)
+            except Exception as e:
+                print(f"[sweep] orphan pass failed: {e}", flush=True)
         except asyncio.CancelledError:
             break
         except Exception as e:

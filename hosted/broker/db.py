@@ -333,6 +333,46 @@ async def update_assignment_status(aid: str, status: str, detail: Any = None) ->
         await conn.commit()
 
 
+async def list_stale_started_assignments(max_age_sec: int,
+                                         orphan_grace_sec: int,
+                                         live_worker_ids: list[str]) -> list[dict]:
+    """Assignments still marked live that nothing else will ever close.
+
+    main.duration_sweep_loop only walks CONNECTED workers, so when a worker
+    dies mid-call its assignment stays 'started' forever: the dashboard shows
+    a phantom live call and the owner's concurrency slot is never released
+    (status='started' counts in count_active_assignments). Two conservative
+    rules, both keyed off dispatched_at so queue time is never counted:
+
+      • past the hard duration cap                  → nothing legitimately runs that long
+      • owning worker no longer connected, and older
+        than orphan_grace_sec                       → nobody is left to end it
+
+    The grace window keeps a worker that is merely *reconnecting* (it gets a
+    fresh in-memory worker id each time) from having its live call cut off.
+    Callers pass the result to update_assignment_status(..., 'ended', ...),
+    which is idempotent and does the billing.
+    """
+    pool = await init_pool()
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """SELECT id, user_id, worker_id,
+                          EXTRACT(EPOCH FROM (now() - COALESCE(dispatched_at, created_at)))::int AS age_sec
+                     FROM assignments
+                    WHERE status = 'started'
+                      AND (
+                            EXTRACT(EPOCH FROM (now() - COALESCE(dispatched_at, created_at))) > %s
+                         OR (
+                            EXTRACT(EPOCH FROM (now() - COALESCE(dispatched_at, created_at))) > %s
+                            AND (worker_id IS NULL OR NOT (worker_id = ANY(%s)))
+                            )
+                          )""",
+                (max_age_sec, orphan_grace_sec, list(live_worker_ids)),
+            )
+            return await cur.fetchall()
+
+
 async def count_active_assignments(user_id: str) -> int:
     """How many calls this user currently has live or waiting in line.
     Used to cap concurrency so one user can't seize the whole shared pool."""
